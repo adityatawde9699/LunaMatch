@@ -8,7 +8,7 @@ Research prototype for Smart India Hackathon 2026 problem **SIH26166**: correspo
 
 ## Current working scope
 
-The CLI, FastAPI service, and React dashboard run locally. Ingestion supports PDS4 image products, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays. SIFT, ORB, AKAZE, pretrained LoFTR, and a SIFT + LoFTR hybrid feed affine or homography RANSAC. Optional illumination representations, pyramid matching, grid selection, and local sub-pixel coordinate refinement are implemented. IIRS cubes can be reduced to a PCA spatial plane or processed by band. CSV, JSON, TIFF, and PNG exports and a benchmark runner are included. **Real Chandrayaan-2 registration has not been evaluated yet.** Automated and example runs use generated imagery.
+The CLI, FastAPI service, and React dashboard run locally. Ingestion supports PDS4 image products, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays. SIFT, ORB, AKAZE, pretrained SuperPoint + LightGlue, pretrained LoFTR, and a SIFT + LoFTR hybrid feed affine or homography RANSAC. Optional illumination representations, pyramid matching, grid selection, and local sub-pixel coordinate refinement are implemented. IIRS cubes can be reduced to a PCA spatial plane or processed by band. CSV, JSON, TIFF, and PNG exports and a benchmark runner are included. **Real Chandrayaan-2 registration has not been evaluated yet.** Automated and example runs use generated imagery.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ flowchart LR
     A[Local PDS4 / GeoTIFF / TIFF / PNG / JPEG / NumPy] --> B[Common LunarImage]
     B --> C[Valid mask and matching grayscale]
     C --> D[Illumination representation and pyramid]
-    D --> E[SIFT / ORB / AKAZE / LoFTR / Hybrid]
+    D --> E[SIFT / ORB / AKAZE / LightGlue / LoFTR / Hybrid]
     E --> F[Affine or homography RANSAC]
     F --> G[Grid selection and optional sub-pixel refinement]
     F --> H[Source-to-reference warp]
@@ -48,6 +48,15 @@ For LoFTR and Hybrid, install CPU PyTorch and Kornia:
 
 Pretrained outdoor LoFTR weights download on first use and are cached in `LUNAMATCH_MODEL_CACHE` or a per-user temporary directory. Set a durable writable cache path for offline reuse. CPU inference was tested; CUDA availability is reported but GPU inference has not been tested here. A missing model or weights returns an explicit error.
 
+For SuperPoint + LightGlue, install the official CVG repository and CPU torchvision. Use `--no-deps` on the repository install because its unpinned `opencv-python` requirement currently resolves to OpenCV 5, which breaks the AKAZE baseline in this environment:
+
+```bash
+.venv/bin/python -m pip install torchvision --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/python -m pip install --no-deps 'git+https://github.com/cvg/LightGlue.git@eb42fee2d71449efb0aa5c10549752b5d75384d8'
+```
+
+The official SuperPoint and LightGlue weights download on first use into the same cache. Both learned matchers and Hybrid passed local CPU smoke tests on generated image pairs. Run those opt-in tests after the weights are cached with `LUNAMATCH_TEST_LEARNED=1 .venv/bin/python -m pytest tests/matching/test_optional_learned.py`.
+
 ## Inspect images
 
 Keep official/public products in `data/raw/`, calibrated products in `data/calibrated/`, and derived products in `data/processed/`. For PDS4, retain the XML label and its referenced binary files together. The first supported numeric 2D/3D array is loaded. Three dimensional PDS4 arrays need explicit Line, Sample, and Band axes. The input metadata is preserved; missing fields are `null`. GeoTIFF pixel scale is populated only for a projected CRS with metre units and nearly equal axis scales; the matching report records a scale ratio when both products provide one.
@@ -72,7 +81,7 @@ Generate the included **synthetic software-test pair**:
   --matcher sift --output results/sample
 ```
 
-Use `--matcher orb`, `akaze`, `loftr`, or `hybrid` for other methods; `--geometry affine` selects affine RANSAC. `--clahe` enables local contrast enhancement. `--config configs/default.yaml` loads supported YAML settings, and explicit CLI flags override them. The YAML also controls illumination normalization, gradients, a heuristic shadow mask, pyramid levels, IIRS PCA or band selection, grid limits, and optional sub-pixel refinement.
+Use `--matcher orb`, `akaze`, `lightglue`, `loftr`, or `hybrid` for other methods; `--geometry affine` selects affine RANSAC. `--clahe` enables local contrast enhancement. `--config configs/default.yaml` loads supported YAML settings, and explicit CLI flags override them. The YAML also controls illumination normalization, gradients, a heuristic shadow mask, pyramid levels, IIRS PCA or band selection, grid limits, and optional sub-pixel refinement.
 
 The result directory contains `registered_image.tif`, browser PNG previews, selected `matches.csv/json`, all `candidate_matches.csv/json`, `transformation.json`, `metrics.json`, `job_log.json`, `overlay.png`, `match_visualization.png`, `error_map.png`, `confidence_map.png`, and `distribution.png`. The TIFF warps source pixels while preserving their supported numeric bit depth and copies reference CRS/transform when available; PNGs are display representations. The matrix maps **source pixels to reference pixels**. `registration_residual_rmse_px` is the RANSAC inlier reprojection residual. `ground_truth_rmse_px` is `null` because independent ground truth has not been supplied. `selected_coverage` measures occupied cells of an 8×8 reference-image grid. Confidence scores are not calibrated probabilities. The error and confidence maps show **sparse point markers**, not dense truth fields. Fractional refined coordinates are estimates; sub-pixel accuracy remains unvalidated.
 
@@ -84,7 +93,7 @@ The result directory contains `registered_image.tif`, browser PNG previews, sele
 
 ## Dataset preparation and research limits
 
-Official/public Chandrayaan-2 products should be obtained from the ISRO/ISSDC PRADAN archive according to its access terms. No archive data is bundled here. Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Synthetic IIRS PCA and band-selection experiments verify software plumbing only; real cross-modal matching is **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Large-image tiling, calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open. SuperPoint + LightGlue is not integrated.
+Official/public Chandrayaan-2 products should be obtained from the ISRO/ISSDC PRADAN archive according to its access terms. No archive data is bundled here. Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Synthetic IIRS PCA and band-selection experiments verify software plumbing only; real cross-modal matching is **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Large-image tiling, calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open.
 
 ## API and dashboard
 
@@ -106,7 +115,7 @@ API endpoints are `POST /api/v1/register`, `GET /api/v1/results/{job_id}`, `/mat
 .venv/bin/python -m lunamatch benchmark --config experiments/configs/ablation.yaml --output results/ablation
 ```
 
-Configs also cover illumination, scale, and synthetic IIRS-to-grayscale matching. Ablation A–F adds illumination normalization, multi-scale, hybrid AI, spatial selection, then sub-pixel refinement. Each run emits CSV/JSON rows with a `synthetic` flag; failed runs record an error and blank measurements. No benchmark table is prefilled with invented values.
+Configs also cover illumination, scale, a LightGlue/LoFTR comparison, and synthetic IIRS-to-grayscale matching. Ablation A–F adds illumination normalization, multi-scale, hybrid AI, spatial selection, then sub-pixel refinement. Each run emits CSV/JSON rows with a `synthetic` flag; failed runs record an error and blank measurements. No benchmark table is prefilled with invented values.
 
 ## Docker and remaining work
 

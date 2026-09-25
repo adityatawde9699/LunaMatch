@@ -24,7 +24,7 @@ def main() -> int:
     register_cmd.add_argument("--reference", required=True, type=Path)
     register_cmd.add_argument("--source-sensor", default=None)
     register_cmd.add_argument("--reference-sensor", default=None)
-    register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "loftr", "hybrid"))
+    register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"))
     register_cmd.add_argument("--geometry", choices=("homography", "affine"))
     register_cmd.add_argument("--clahe", action="store_true")
     register_cmd.add_argument("--config", type=Path)

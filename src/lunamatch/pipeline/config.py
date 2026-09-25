@@ -34,7 +34,7 @@ class RegistrationConfig:
 
     def __post_init__(self) -> None:
         """Reject parameter combinations that cannot be run meaningfully."""
-        if self.matcher not in ("sift", "orb", "akaze", "loftr", "hybrid"):
+        if self.matcher not in ("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"):
             raise ValueError(f"Unsupported matcher: {self.matcher}")
         if self.geometry_model not in ("affine", "homography"):
             raise ValueError(f"Unsupported geometry model: {self.geometry_model}")

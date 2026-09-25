@@ -18,6 +18,7 @@ from lunamatch.geometry.warping import warp_source
 from lunamatch.ingestion.metadata import LunarImage
 from lunamatch.matching.classical import match_features
 from lunamatch.matching.loftr import match_loftr
+from lunamatch.matching.lightglue import match_lightglue
 from lunamatch.matching.cross_modal import combine_correspondences
 from lunamatch.matching.matcher_interface import Correspondences
 from lunamatch.preprocessing.normalization import matching_gray
@@ -83,7 +84,7 @@ def register(source: LunarImage, reference: LunarImage,
     started = perf_counter()
     config = config or RegistrationConfig()
     extractors = {"sift": extract_sift, "orb": extract_orb, "akaze": extract_akaze}
-    if config.matcher not in (*extractors, "loftr", "hybrid"):
+    if config.matcher not in (*extractors, "loftr", "lightglue", "hybrid"):
         raise ValueError(f"Matcher is unavailable in this milestone: {config.matcher}")
     if config.iirs_mode not in ("pca", "band"):
         raise ValueError(f"Unsupported IIRS representation: {config.iirs_mode}")
@@ -103,6 +104,9 @@ def register(source: LunarImage, reference: LunarImage,
     if config.matcher == "loftr":
         matches, device = match_loftr(src, ref)
         source_keypoints = reference_keypoints = None
+    elif config.matcher == "lightglue":
+        matches, device, source_keypoints, reference_keypoints = match_lightglue(
+            src, ref, max_keypoints=min(config.max_features, 2048))
     elif config.matcher == "hybrid":
         classical_config = RegistrationConfig(
             matcher="sift", geometry_model=config.geometry_model,
@@ -168,7 +172,8 @@ def register(source: LunarImage, reference: LunarImage,
         "source": source.summary(),
         "reference": reference.summary(),
         "configuration": asdict(config),
-        "model": "Kornia LoFTR outdoor" if config.matcher in ("loftr", "hybrid") else config.matcher,
+        "model": ("Kornia LoFTR outdoor" if config.matcher in ("loftr", "hybrid")
+                  else "CVG SuperPoint + LightGlue" if config.matcher == "lightglue" else config.matcher),
         "device": device,
     }
     return RegistrationResult(src, ref, registered, registered_preview, matches, geometry, metrics,

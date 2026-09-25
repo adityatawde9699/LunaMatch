@@ -1,13 +1,9 @@
 """Optional pretrained LoFTR dense correspondence adapter."""
 
-import getpass
-import os
-from pathlib import Path
-import tempfile
-
 import cv2
 import numpy as np
 
+from lunamatch.utils.model_cache import set_model_cache
 from .matcher_interface import Correspondences
 
 
@@ -45,13 +41,10 @@ def match_loftr(source: np.ndarray, reference: np.ndarray, *,
         raise ModelUnavailable("CUDA requested but no CUDA GPU is available")
     if selected not in ("cpu", "cuda"):
         raise ValueError(f"Unsupported inference device: {selected}")
-    cache = Path(os.environ.get("LUNAMATCH_MODEL_CACHE",
-                                str(Path(tempfile.gettempdir()) / f"lunamatch-models-{getpass.getuser()}")))
     try:
-        cache.mkdir(parents=True, exist_ok=True, mode=0o700)
-        torch.hub.set_dir(str(cache))
+        set_model_cache()
     except OSError as exc:
-        raise ModelUnavailable(f"Model cache is not writable: {cache}") from exc
+        raise ModelUnavailable(f"Model cache is not writable: {exc}") from exc
     src_small, sx, sy = _resize_for_model(source, max_side)
     ref_small, rx, ry = _resize_for_model(reference, max_side)
     try:

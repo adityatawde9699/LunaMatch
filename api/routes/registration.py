@@ -64,7 +64,7 @@ async def register(source: UploadFile = File(...), reference: UploadFile = File(
     """Register two uploaded raster images and persist the result artifacts."""
     if source_sensor not in ("OHRC", "TMC-2", "IIRS") or reference_sensor not in ("OHRC", "TMC-2", "IIRS"):
         raise HTTPException(422, "Sensors must be OHRC, TMC-2, or IIRS")
-    if matcher not in ("sift", "orb", "akaze", "loftr", "hybrid"):
+    if matcher not in ("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"):
         raise HTTPException(422, "Unsupported matcher")
     try:
         options = RegistrationOptions.model_validate_json(preprocessing)

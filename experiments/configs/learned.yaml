@@ -1,0 +1,15 @@
+name: synthetic_learned_comparison
+pairs:
+  - name: generated_translation
+    synthetic: true
+    source: ../../data/samples/synthetic_source.png
+    reference: ../../data/samples/synthetic_reference.png
+    source_sensor: OHRC
+    reference_sensor: OHRC
+variants:
+  - name: SuperPoint_LightGlue
+    parameters: {matcher: lightglue}
+  - name: LoFTR
+    parameters: {matcher: loftr}
+  - name: Hybrid
+    parameters: {matcher: hybrid}
