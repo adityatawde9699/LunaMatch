@@ -4,11 +4,11 @@
 
 *AI proposes. Geometry verifies. Sub-pixel optimization refines.*
 
-Research prototype for Smart India Hackathon 2026 problem **SIH26166**: correspondence between Chandrayaan-2 OHRC, TMC-2, and IIRS optical imagery under illumination, viewpoint, scale, resolution, and modality changes. This repository is an independent prototype; it does not claim ISRO endorsement or validation on Chandrayaan-2 products.
+Research prototype for Smart India Hackathon 2026 problem **SIH26166**: correspondence between Chandrayaan-2 OHRC, TMC-2, and IIRS optical imagery under illumination, viewpoint, scale, resolution, and modality changes. This repository is an independent prototype; it does not claim ISRO endorsement.
 
 ## Current working scope
 
-The CLI, FastAPI service, and React dashboard run locally. Ingestion supports PDS4 image products, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays. SIFT, ORB, AKAZE, pretrained SuperPoint + LightGlue, pretrained LoFTR, and a SIFT + LoFTR hybrid feed affine or homography RANSAC. Optional illumination representations, pyramid matching, grid selection, and local sub-pixel coordinate refinement are implemented. IIRS cubes can be reduced to a PCA spatial plane or processed by band. CSV, JSON, TIFF, and PNG exports and a benchmark runner are included. **Real Chandrayaan-2 registration has not been evaluated yet.** Automated and example runs use generated imagery.
+The CLI, FastAPI service, and React dashboard run locally. Ingestion supports PDS4 image products, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays. SIFT, ORB, AKAZE, pretrained SuperPoint + LightGlue, pretrained LoFTR, and a SIFT + LoFTR hybrid feed affine or homography RANSAC. Optional illumination representations, pyramid matching, grid selection, and local sub-pixel coordinate refinement are implemented. IIRS cubes can be reduced to a PCA spatial plane or processed by band. CSV, JSON, TIFF, and PNG exports and a benchmark runner are included. TMC-2 browse quicklooks and bounded native-resolution science-image windows have been registered; full-strip processing and independent accuracy validation remain unevaluated.
 
 ## Architecture
 
@@ -61,12 +61,31 @@ The official SuperPoint and LightGlue weights download on first use into the sam
 
 Keep official/public products in `data/raw/`, calibrated products in `data/calibrated/`, and derived products in `data/processed/`. For PDS4, retain the XML label and its referenced binary files together. The first supported numeric 2D/3D array is loaded. Three dimensional PDS4 arrays need explicit Line, Sample, and Band axes. The input metadata is preserved; missing fields are `null`. GeoTIFF pixel scale is populated only for a projected CRS with metre units and nearly equal axis scales; the matching report records a scale ratio when both products provide one.
 
+For large uncompressed two dimensional PDS4 images, `inspect --window X Y WIDTH HEIGHT` and `register --source-window ... --reference-window ...` read only the requested science pixels from the labeled binary. Input window coordinates use the full image pixel grid, starting at zero; ordinary registration exports use crop-local coordinates. The science-window experiment below also exports full-image coordinates. The current window reader supports Line then Sample arrays with Last Index Fastest order and listed integer or floating point PDS4 element types; unsupported layouts fail with an explicit error. Three dimensional IIRS cubes still use the regular PDS4 loader and its memory limit.
+
 ```bash
 .venv/bin/python -m lunamatch inspect --input data/raw/product.xml --sensor OHRC --data-level raw --preview results/preview.png
 .venv/bin/python -m lunamatch inspect --input data/raw/image.tif --preview results/preview.png --band 0
 ```
 
 Inspection previews use a percentile display stretch. They do not change source pixels or imply radiometric calibration. Large files over 2 GiB or images over 150 million pixels are rejected; tiled processing is planned.
+
+### Inspect and stage PRADAN product ZIPs
+
+PRADAN observation products arrive as ZIP archives. Inventory a ZIP before extraction:
+
+```bash
+.venv/bin/python -m lunamatch inspect-product --input data/raw2/ch2_ohr_product.zip
+```
+
+The inventory reports inferred sensor/data level only when explicit filename or directory tokens exist, plus XML labels, likely image members, and expanded size. Stage a product while preserving its internal paths:
+
+```bash
+.venv/bin/python -m lunamatch stage-product \
+  --input data/raw2/ch2_ohr_product.zip --output data
+```
+
+Products are placed under `data/<data-level>/<sensor>/<archive-name>/` with a manifest. The command rejects path traversal, symlinks, encrypted members, documentation-only bundles, oversized archives, and existing destinations. It does not calibrate raw data or assume that browse images are science rasters. Keep source downloads in `data/raw/`; staging writes extracted content into sensor/level folders and leaves the archive untouched.
 
 ## Run the classical baseline
 
@@ -93,7 +112,56 @@ The result directory contains `registered_image.tif`, browser PNG previews, sele
 
 ## Dataset preparation and research limits
 
-Official/public Chandrayaan-2 products should be obtained from the ISRO/ISSDC PRADAN archive according to its access terms. No archive data is bundled here. Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Synthetic IIRS PCA and band-selection experiments verify software plumbing only; real cross-modal matching is **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Large-image tiling, calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open.
+Official Chandrayaan-2 imaging products are listed in the [ISRO/ISSDC PRADAN Chandrayaan-2 archive](https://pradan.issdc.gov.in/ch2/). The [data explorer](https://chmapbrowse.issdc.gov.in/) currently requires users to register and log in to download orbiter imaging products. ISRO states that the data is free for non-profit scientific use and remains ISRO property; review the [archive terms](https://pradan.issdc.gov.in/ch2/disclaimer.xhtml) before use. Locally supplied archives are inventoried in `data/processed/raw_inventory.csv` and `raw_inventory.json`; no source archives were modified. PDS4 labels and image files should be kept together when the label references the data file.
+
+`data/raw2` has a separate [initial inventory](data/processed/raw2_inventory.csv) and a live [sensor product inventory](data/processed/sensor_product_inventory.json). The initial inventory describes the instrument bundles and footprint shapefiles; it predates the TMC-2 product downloads. The LTA assembly note says observation product ZIPs must be downloaded separately. Generate a fresh count with `python experiments/inventory_sensor_data.py`.
+
+Current workspace inventory: TMC-2 has 15 complete product ZIPs downloaded, of which five selected same-pass products are staged; one additional download is incomplete. OHRC and IIRS currently have no observation product ZIPs staged. The existing `ohr.zip`, `iir.zip`, and shapefile ZIPs are ancillary instrument metadata/footprints, not observation images. Counts are recalculated by the inventory script and do not count those ancillary archives as products.
+
+The local inventory contains calibrated TMC-2 browse products, raw TMC-2 browse products, sensor footprint shapefiles, TMC geolocation grids, and instrument documentation. It also contains ancillary CHACE-2, CLASS, DFSAR/SAR, and XSM material outside the optical matcher scope. Several year archives are incomplete `.part` files or zero-byte placeholders and were left untouched. The available browse-image archive includes 330 calibrated TMC-2 PNGs for 2019, plus raw browse PNG archives for 2019–2021; these are quicklook images rather than full-resolution science products. A calibrated fore/nadir/aft triplet with its XML labels was extracted to `data/calibrated/TMC-2/browse_2019_10_15/`.
+
+To process all available TMC-2 browse stereo pairs directly from their ZIP archives, run:
+
+```bash
+.venv/bin/python experiments/process_pradan_tmc_browse.py \
+  --archive-dir data/raw --output results/pradan_tmc2_browse_all
+```
+
+This matches fore/nadir and aft/nadir products by PDS4 acquisition timestamps, registers them with SIFT and homography RANSAC, and writes `pair_manifest.csv`, `pair_metrics.csv`, selected tie points, per-year/view summary JSON, and representative full artifact bundles. The current batch completed 1,494/1,494 pairs: 440 raw and 220 calibrated pairs from 2019, plus 538 raw pairs from 2020 and 516 from 2021. These are browse-pair pipeline measurements only; ground-truth error was not measured, and successful RANSAC fitting does not establish scientific accuracy.
+
+Some browse rasters exceed OpenCV's per-axis warp limit. The geometry warp handles large source or destination dimensions with bounded tiles, so those scenes can be registered without silently truncating the image.
+
+Prepare the sensor footprint layers and index calibrated TMC geolocation grid labels with:
+
+```bash
+.venv/bin/python experiments/prepare_pradan_spatial_assets.py \
+  --archive-dir data/raw --output-dir data/processed/spatial
+```
+
+This extracts the original OHRC, TMC-2, and IIRS shapefile components for GIS use and writes `tmc_geolocation_index.csv/json`, linking geolocation product labels to matching available browse products. It indexes label-declared grid counts; it does not yet interpolate geolocation grids at tie points or claim ground-truth accuracy.
+
+The five-product TMC-2 prototype has a repeatable four-pair run:
+
+```bash
+.venv/bin/python experiments/prepare_tmc2_prototype.py
+.venv/bin/python experiments/process_tmc2_prototype.py
+.venv/bin/python experiments/inventory_sensor_data.py
+```
+
+It registers calibrated nadir-to-aft, calibrated nadir-to-fore, raw nadir-to-fore, and same-view raw-to-calibrated nadir browse quicklooks. The report and CSV are in `data/processed/tmc2_prototype_report.json` and `tmc2_prototype_metrics.csv`; registered TIFFs and visualizations are under `results/tmc2_prototype/`. These are operational quicklook results, not full-resolution science-image validation. RANSAC residual is not ground-truth error, and independent tie points are unavailable.
+
+When a PNG/JPEG has a same-stem PDS4 XML sidecar, the loader retains available acquisition and instrument fields; missing fields remain `null`. Independent ground truth is unavailable for the current pairs.
+
+To register native-resolution TMC-2 windows from the same five products, first run the browse experiment above, then:
+
+```bash
+.venv/bin/python experiments/process_tmc2_science_windows.py \
+  --reference-window 1000 20000 2048 2048
+```
+
+This run selects overlapping stereo source windows using the measured browse transformations and the actual browse/science dimensions. SIFT and RANSAC then operate on native IMG pixels. It writes full-image pixel tie points and transforms beside each crop result under `results/tmc2_science_prototype/`, with a summary in `data/processed/tmc2_science_window_report.json`. The browse transform locates the crops; it is not passed to native-resolution RANSAC. The default window registered calibrated fore/nadir and aft/nadir with 2,739 and 2,742 inliers, and a raw/calibrated nadir pair with 5,287 inliers. Their fitted reprojection residual RMSEs were 1.44, 1.49, and 0.10 pixels respectively. These are three crop-pair pipeline measurements on official imagery, without independent truth data.
+
+Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Full-strip TMC-2 processing, real OHRC/IIRS registration, cross-modal matching, and lunar-reference registration remain **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open.
 
 ## API and dashboard
 

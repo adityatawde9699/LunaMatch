@@ -7,7 +7,9 @@ frontend/*.tsbuildinfo
 src/*.egg-info/
 *.pyc
 /data/raw/**
+/data/raw2/**
 /data/calibrated/**
+/data/derived/**
 /data/processed/**
 /data/pairs/**
 /results/**

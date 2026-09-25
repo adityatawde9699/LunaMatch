@@ -35,6 +35,26 @@ def test_png_load_and_preview(tmp_path) -> None:
     assert save_preview(product, tmp_path / "preview.png").is_file()
 
 
+def test_browse_png_uses_available_pds4_sidecar_metadata(tmp_path) -> None:
+    path = tmp_path / "browse.png"
+    Image.fromarray(np.full((8, 9), 42, dtype=np.uint8)).save(path)
+    path.with_suffix(".xml").write_text("""<Product_Observational>
+      <Observation_Area><Time_Coordinates>
+        <start_date_time>2026-08-23T16:57:51Z</start_date_time>
+      </Time_Coordinates><Discipline_Area>
+        <instrument_id>TMC-2</instrument_id>
+        <solar_elevation>18.5</solar_elevation>
+      </Discipline_Area></Observation_Area>
+    </Product_Observational>""")
+
+    product = load_image(path)
+
+    assert product.sensor == "TMC-2"
+    assert product.acquisition_time == "2026-08-23T16:57:51Z"
+    assert product.sun_elevation == 18.5
+    assert product.metadata["pds4_sidecar"] == str(path.with_suffix(".xml"))
+
+
 def test_multiband_geotiff_load(tmp_path) -> None:
     import rasterio
     from rasterio.transform import from_origin
@@ -101,3 +121,39 @@ def test_pds4_array_and_label(tmp_path) -> None:
     assert product.bands == 2
     assert product.sensor == "IIRS"
     assert product.metadata["format"] == "PDS4"
+
+
+def test_pds4_window_reads_science_pixels_without_full_array(tmp_path) -> None:
+    pixels = np.arange(30, dtype="<u2").reshape(5, 6)
+    (tmp_path / "image.img").write_bytes(pixels.tobytes())
+    label = """<Product_Observational xmlns="http://pds.nasa.gov/pds4/pds/v1">
+    <Observation_Area><Time_Coordinates><start_date_time>2026-08-23T16:57:51Z</start_date_time>
+    </Time_Coordinates></Observation_Area>
+    <File_Area_Observational><File><file_name>image.img</file_name></File>
+    <Array_2D_Image><offset unit="byte">0</offset><axes>2</axes>
+    <axis_index_order>Last Index Fastest</axis_index_order>
+    <Element_Array><data_type>UnsignedLSB2</data_type></Element_Array>
+    <Axis_Array><axis_name>Line</axis_name><elements>5</elements>
+    <sequence_number>1</sequence_number></Axis_Array>
+    <Axis_Array><axis_name>Sample</axis_name><elements>6</elements>
+    <sequence_number>2</sequence_number></Axis_Array>
+    </Array_2D_Image></File_Area_Observational></Product_Observational>"""
+    path = tmp_path / "image.xml"
+    path.write_text(label)
+
+    product = load_image(path, sensor="TMC-2", data_level="calibrated",
+                         window=(2, 1, 3, 2), max_pixels=6)
+
+    np.testing.assert_array_equal(product.image, pixels[1:3, 2:5])
+    assert product.image.dtype == np.dtype("<u2")
+    assert product.metadata["full_width"] == 6
+    assert product.metadata["window"] == {"x": 2, "y": 1, "width": 3, "height": 2}
+    assert product.acquisition_time == "2026-08-23T16:57:51Z"
+    with pytest.raises(ImageLoadError, match="outside"):
+        load_image(path, window=(5, 1, 2, 2))
+    (tmp_path / "image.img").write_bytes(pixels.tobytes()[:-2])
+    with pytest.raises(ImageLoadError, match="shorter"):
+        load_image(path, window=(2, 1, 3, 2))
+    path.write_text(label.replace("image.img", "../outside.img"))
+    with pytest.raises(ImageLoadError, match="unsafe"):
+        load_image(path, window=(2, 1, 3, 2))

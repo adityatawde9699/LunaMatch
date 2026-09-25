@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from lunamatch.ingestion import load_image
+from lunamatch.ingestion.pradan_archive import inspect_pradan_product, stage_pradan_product
 from lunamatch.ingestion.validators import ImageLoadError
 from lunamatch.utils.image import save_preview
 
@@ -16,12 +17,25 @@ def main() -> int:
     inspect = commands.add_parser("inspect", help="Inspect image metadata and optional preview")
     inspect.add_argument("--input", required=True, type=Path)
     inspect.add_argument("--sensor", default=None)
-    inspect.add_argument("--data-level", choices=("raw", "calibrated", "processed", "unknown"), default="unknown")
+    inspect.add_argument("--data-level", choices=("raw", "calibrated", "derived", "processed", "unknown"), default="unknown")
     inspect.add_argument("--preview", type=Path)
     inspect.add_argument("--band", type=int, default=0)
+    inspect.add_argument("--window", type=int, nargs=4, metavar=("X", "Y", "WIDTH", "HEIGHT"))
+    inspect_product = commands.add_parser(
+        "inspect-product", help="Inventory a PRADAN product ZIP without extracting it")
+    inspect_product.add_argument("--input", required=True, type=Path)
+    stage_product = commands.add_parser(
+        "stage-product", help="Safely extract a PRADAN product ZIP by sensor and data level")
+    stage_product.add_argument("--input", required=True, type=Path)
+    stage_product.add_argument("--output", type=Path, default=Path("data"))
+    stage_product.add_argument("--max-uncompressed-gb", type=float, default=20.0)
     register_cmd = commands.add_parser("register", help="Register an image pair with SIFT and RANSAC")
     register_cmd.add_argument("--source", required=True, type=Path)
     register_cmd.add_argument("--reference", required=True, type=Path)
+    register_cmd.add_argument("--source-window", type=int, nargs=4,
+                              metavar=("X", "Y", "WIDTH", "HEIGHT"))
+    register_cmd.add_argument("--reference-window", type=int, nargs=4,
+                              metavar=("X", "Y", "WIDTH", "HEIGHT"))
     register_cmd.add_argument("--source-sensor", default=None)
     register_cmd.add_argument("--reference-sensor", default=None)
     register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"))
@@ -35,17 +49,31 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "inspect":
-            product = load_image(args.input, sensor=args.sensor, data_level=args.data_level)
+            product = load_image(args.input, sensor=args.sensor, data_level=args.data_level,
+                                 window=tuple(args.window) if args.window else None)
             if args.preview:
                 save_preview(product, args.preview, band=args.band)
             print(json.dumps(product.summary(), indent=2, default=str))
+            return 0
+        if args.command == "inspect-product":
+            print(json.dumps(inspect_pradan_product(args.input), indent=2))
+            return 0
+        if args.command == "stage-product":
+            if args.max_uncompressed_gb <= 0:
+                raise ValueError("--max-uncompressed-gb must be positive")
+            manifest = stage_pradan_product(
+                args.input, args.output,
+                max_uncompressed_bytes=int(args.max_uncompressed_gb * 1024**3))
+            print(json.dumps(manifest, indent=2))
             return 0
         if args.command == "register":
             from lunamatch.pipeline.config import RegistrationConfig, load_config
             from lunamatch.pipeline.registration import register
 
-            source = load_image(args.source, sensor=args.source_sensor)
-            reference = load_image(args.reference, sensor=args.reference_sensor)
+            source = load_image(args.source, sensor=args.source_sensor,
+                                window=tuple(args.source_window) if args.source_window else None)
+            reference = load_image(args.reference, sensor=args.reference_sensor,
+                                   window=tuple(args.reference_window) if args.reference_window else None)
             config = load_config(args.config) if args.config else RegistrationConfig()
             if args.matcher:
                 config.matcher = args.matcher

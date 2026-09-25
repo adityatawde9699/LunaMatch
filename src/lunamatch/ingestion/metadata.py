@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-DataLevel = Literal["raw", "calibrated", "processed", "unknown"]
+DataLevel = Literal["raw", "calibrated", "derived", "processed", "unknown"]
 
 
 @dataclass(slots=True)

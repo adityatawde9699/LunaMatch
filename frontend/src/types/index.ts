@@ -22,6 +22,12 @@ export interface RegistrationOptions {
   geometry_model: 'homography' | 'affine'
   spatial_selection: boolean
   subpixel_refinement: boolean
+  source_band: number
+  reference_band: number
+  iirs_mode: 'pca' | 'band'
+  grid_rows: number
+  grid_cols: number
+  max_matches_per_cell: number
 }
 
 export interface JobSummary {
@@ -30,7 +36,7 @@ export interface JobSummary {
   matches: number
   inliers: number
   inlier_ratio: number
-  rmse: number
+  rmse: number | null
   rmse_type: string
   coverage: number
   runtime_seconds: number

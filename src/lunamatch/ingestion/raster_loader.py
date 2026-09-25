@@ -67,14 +67,18 @@ def _pillow_load(path: Path, max_pixels: int) -> tuple[np.ndarray, np.ndarray, d
 
 
 def load_image(source: str | Path | np.ndarray, *, sensor: str | None = None,
-               data_level: str = "unknown", max_pixels: int = MAX_PIXELS) -> LunarImage:
+               data_level: str = "unknown", max_pixels: int = MAX_PIXELS,
+               window: tuple[int, int, int, int] | None = None) -> LunarImage:
     """Load an image without inventing sensor, calibration, or geometry metadata.
 
     Accepted sources: PDS4 XML, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays.
     The caller labels raw/calibrated/processed status if it is known.
     """
-    if data_level not in ("raw", "calibrated", "processed", "unknown"):
+    if data_level not in ("raw", "calibrated", "derived", "processed", "unknown"):
         raise ImageLoadError(f"Invalid data level: {data_level}")
+    if window is not None and (isinstance(source, np.ndarray) or
+                               Path(source).suffix.lower() != ".xml"):
+        raise ImageLoadError("Window loading currently requires a PDS4 XML label")
     if isinstance(source, np.ndarray):
         image = validate_array(source, max_pixels)
         mask = np.isfinite(image).all(axis=-1) if image.ndim == 3 else np.isfinite(image)
@@ -83,7 +87,10 @@ def load_image(source: str | Path | np.ndarray, *, sensor: str | None = None,
     path = Path(source)
     validate_path(path)
     if path.suffix.lower() == ".xml":
-        from .pds4_loader import load_pds4
+        from .pds4_loader import load_pds4, load_pds4_window
+        if window is not None:
+            return load_pds4_window(path, window, sensor=sensor,
+                                    data_level=data_level, max_pixels=max_pixels)
         return load_pds4(path, sensor=sensor, data_level=data_level, max_pixels=max_pixels)
     if path.suffix.lower() in (".tif", ".tiff") and importlib.util.find_spec("rasterio"):
         image, mask, metadata = _rasterio_load(path, max_pixels)
@@ -91,18 +98,32 @@ def load_image(source: str | Path | np.ndarray, *, sensor: str | None = None,
         image, mask, metadata = _pillow_load(path, max_pixels)
     image = validate_array(image, max_pixels)
     tags = {str(k).lower(): v for k, v in metadata.get("tags", {}).items()}
-    sensor = sensor or tags.get("instrument_id") or tags.get("sensor")
+    sidecar_fields: dict[str, str] = {}
+    if path.suffix.lower() in (".png", ".jpg", ".jpeg"):
+        sidecar = path.with_suffix(".xml")
+        if sidecar.is_file():
+            from .pds4_loader import _label_fields
+            try:
+                sidecar_fields = _label_fields(sidecar)
+                metadata["pds4_sidecar"] = str(sidecar)
+                metadata["label_fields"] = sidecar_fields
+            except ImageLoadError as exc:
+                metadata["pds4_sidecar_error"] = str(exc)
+    sensor = (sensor or tags.get("instrument_id") or tags.get("sensor") or
+              sidecar_fields.get("instrument_id") or sidecar_fields.get("instrument_name"))
     def numeric(*keys: str) -> float | None:
         for key in keys:
-            if key in tags:
-                try:
-                    return float(tags[key])
-                except ValueError:
-                    return None
+            for fields in (tags, sidecar_fields):
+                if key in fields:
+                    try:
+                        return float(fields[key])
+                    except ValueError:
+                        return None
         return None
     return LunarImage(image=image, sensor=sensor, data_level=data_level,
                       source_path=path, metadata=metadata, valid_mask=mask,
                       pixel_scale=metadata.get("pixel_scale_m"),
-                      acquisition_time=tags.get("start_date_time") or tags.get("acquisition_time"),
+                      acquisition_time=(tags.get("start_date_time") or tags.get("acquisition_time") or
+                                        sidecar_fields.get("start_date_time")),
                       sun_azimuth=numeric("sun_azimuth", "solar_azimuth"),
                       sun_elevation=numeric("sun_elevation", "solar_elevation"))
