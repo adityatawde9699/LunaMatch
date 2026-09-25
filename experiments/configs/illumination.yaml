@@ -1,0 +1,13 @@
+name: synthetic_illumination
+pairs:
+  - name: generated_translation
+    synthetic: true
+    source: ../../data/samples/synthetic_source.png
+    reference: ../../data/samples/synthetic_reference.png
+variants:
+  - name: raw_intensity
+    parameters: {matcher: sift, local_normalization: false}
+  - name: local_normalization
+    parameters: {matcher: sift, local_normalization: true}
+  - name: gradient
+    parameters: {matcher: sift, gradient: true}

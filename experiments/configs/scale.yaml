@@ -1,0 +1,11 @@
+name: synthetic_scale
+pairs:
+  - name: generated_translation
+    synthetic: true
+    source: ../../data/samples/synthetic_source.png
+    reference: ../../data/samples/synthetic_reference.png
+variants:
+  - name: single_level
+    parameters: {matcher: sift, pyramid_levels: 1}
+  - name: three_levels
+    parameters: {matcher: sift, pyramid_levels: 3}

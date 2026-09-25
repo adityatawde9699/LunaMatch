@@ -1,0 +1,73 @@
+"""Command line interface for image inspection."""
+
+import argparse
+import json
+from pathlib import Path
+
+from lunamatch.ingestion import load_image
+from lunamatch.ingestion.validators import ImageLoadError
+from lunamatch.utils.image import save_preview
+
+
+def main() -> int:
+    """Run the LunaMatch command line interface."""
+    parser = argparse.ArgumentParser(prog="lunamatch")
+    commands = parser.add_subparsers(dest="command", required=True)
+    inspect = commands.add_parser("inspect", help="Inspect image metadata and optional preview")
+    inspect.add_argument("--input", required=True, type=Path)
+    inspect.add_argument("--sensor", default=None)
+    inspect.add_argument("--data-level", choices=("raw", "calibrated", "processed", "unknown"), default="unknown")
+    inspect.add_argument("--preview", type=Path)
+    inspect.add_argument("--band", type=int, default=0)
+    register_cmd = commands.add_parser("register", help="Register an image pair with SIFT and RANSAC")
+    register_cmd.add_argument("--source", required=True, type=Path)
+    register_cmd.add_argument("--reference", required=True, type=Path)
+    register_cmd.add_argument("--source-sensor", default=None)
+    register_cmd.add_argument("--reference-sensor", default=None)
+    register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "loftr", "hybrid"))
+    register_cmd.add_argument("--geometry", choices=("homography", "affine"))
+    register_cmd.add_argument("--clahe", action="store_true")
+    register_cmd.add_argument("--config", type=Path)
+    register_cmd.add_argument("--output", required=True, type=Path)
+    benchmark_cmd = commands.add_parser("benchmark", help="Run a declared experiment matrix")
+    benchmark_cmd.add_argument("--config", required=True, type=Path)
+    benchmark_cmd.add_argument("--output", required=True, type=Path)
+    args = parser.parse_args()
+    try:
+        if args.command == "inspect":
+            product = load_image(args.input, sensor=args.sensor, data_level=args.data_level)
+            if args.preview:
+                save_preview(product, args.preview, band=args.band)
+            print(json.dumps(product.summary(), indent=2, default=str))
+            return 0
+        if args.command == "register":
+            from lunamatch.pipeline.config import RegistrationConfig, load_config
+            from lunamatch.pipeline.registration import register
+
+            source = load_image(args.source, sensor=args.source_sensor)
+            reference = load_image(args.reference, sensor=args.reference_sensor)
+            config = load_config(args.config) if args.config else RegistrationConfig()
+            if args.matcher:
+                config.matcher = args.matcher
+            if args.geometry:
+                config.geometry_model = args.geometry
+            if args.clahe:
+                config.clahe = True
+            result = register(source, reference, config)
+            result.save(args.output)
+            print(json.dumps({"output": str(args.output), **result.metrics}, indent=2))
+            return 0
+        if args.command == "benchmark":
+            from lunamatch.evaluation.benchmark import run_benchmark
+
+            rows = run_benchmark(args.config, args.output)
+            print(json.dumps({"output": str(args.output), "runs": len(rows),
+                              "completed": sum(row["status"] == "completed" for row in rows)}, indent=2))
+            return 0
+    except (ImageLoadError, ValueError, RuntimeError) as exc:
+        parser.exit(2, f"lunamatch: {exc}\n")
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

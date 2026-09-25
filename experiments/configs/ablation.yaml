@@ -1,0 +1,21 @@
+name: synthetic_ablation
+pairs:
+  - name: generated_translation
+    synthetic: true
+    source: ../../data/samples/synthetic_source.png
+    reference: ../../data/samples/synthetic_reference.png
+    source_sensor: OHRC
+    reference_sensor: OHRC
+variants:
+  - name: A_baseline
+    parameters: {matcher: sift, spatial_selection: false}
+  - name: B_illumination
+    parameters: {matcher: sift, local_normalization: true, spatial_selection: false}
+  - name: C_multiscale
+    parameters: {matcher: sift, local_normalization: true, pyramid_levels: 3, spatial_selection: false}
+  - name: D_ai
+    parameters: {matcher: hybrid, local_normalization: true, pyramid_levels: 3, spatial_selection: false}
+  - name: E_spatial
+    parameters: {matcher: hybrid, local_normalization: true, pyramid_levels: 3, spatial_selection: true}
+  - name: F_subpixel
+    parameters: {matcher: hybrid, local_normalization: true, pyramid_levels: 3, spatial_selection: true, subpixel_refinement: true}

@@ -1,0 +1,13 @@
+name: synthetic_iirs_representation
+pairs:
+  - name: generated_cube_to_grayscale
+    synthetic: true
+    source: ../../data/samples/synthetic_iirs_cube.tif
+    reference: ../../data/samples/synthetic_reference.png
+    source_sensor: IIRS
+    reference_sensor: OHRC
+variants:
+  - name: pca_sift
+    parameters: {matcher: sift, iirs_mode: pca}
+  - name: band0_sift
+    parameters: {matcher: sift, iirs_mode: band}

@@ -1,0 +1,15 @@
+name: synthetic_classical_baseline
+pairs:
+  - name: generated_translation
+    synthetic: true
+    source: ../../data/samples/synthetic_source.png
+    reference: ../../data/samples/synthetic_reference.png
+    source_sensor: OHRC
+    reference_sensor: OHRC
+variants:
+  - name: SIFT
+    parameters: {matcher: sift}
+  - name: ORB
+    parameters: {matcher: orb}
+  - name: AKAZE
+    parameters: {matcher: akaze}

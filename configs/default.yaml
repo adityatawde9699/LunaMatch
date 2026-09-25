@@ -1,0 +1,27 @@
+matcher:
+  name: sift
+  ratio: 0.75
+  max_features: 6000
+preprocessing:
+  clahe: false
+  local_normalization: false
+  gradient: false
+  shadow_mask: false
+  pyramid_levels: 1
+  source_band: 0
+  reference_band: 0
+geometry:
+  model: homography
+  ransac_threshold: 3.0
+  confidence: 0.99
+distribution:
+  enabled: true
+  grid_rows: 8
+  grid_cols: 8
+  max_matches_per_cell: 10
+refinement:
+  enabled: false
+  window_size: 11
+  search_radius: 3
+cross_modal:
+  iirs_mode: pca

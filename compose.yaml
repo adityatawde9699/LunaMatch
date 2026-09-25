@@ -1,0 +1,20 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./results:/app/results
+      - model-cache:/app/model-cache
+    environment:
+      LUNAMATCH_RESULTS_DIR: /app/results/jobs
+      LUNAMATCH_MODEL_CACHE: /app/model-cache
+      LUNAMATCH_MAX_UPLOAD_BYTES: "104857600"
+  frontend:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+volumes:
+  model-cache:
