@@ -123,4 +123,4 @@ Configs also cover illumination, scale, a LightGlue/LoFTR comparison, and synthe
 docker compose up --build
 ```
 
-Compose exposes the API on port 8000 and dashboard on port 5173. The Compose syntax was checked, but full images have not been built here. Real OHRC/TMC-2/IIRS pairs must be prepared and independently evaluated before any scientific performance claim.
+Compose exposes the API on port 8000 and dashboard on port 5173. Both images built, and a local smoke test returned API health plus the dashboard HTML. Real OHRC/TMC-2/IIRS pairs must be prepared and independently evaluated before any scientific performance claim.
