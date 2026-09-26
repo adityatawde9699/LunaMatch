@@ -6,9 +6,38 @@
 
 Research prototype for Smart India Hackathon 2026 problem **SIH26166**: correspondence between Chandrayaan-2 OHRC, TMC-2, and IIRS optical imagery under illumination, viewpoint, scale, resolution, and modality changes. This repository is an independent prototype; it does not claim ISRO endorsement.
 
+## Quick start
+
+From the repository root:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[planetary,api,test]'
+.venv/bin/python experiments/generate_sample.py
+.venv/bin/python -m lunamatch register \
+  --source data/samples/synthetic_source.png \
+  --reference data/samples/synthetic_reference.png \
+  --source-sensor OHRC --reference-sensor OHRC \
+  --matcher sift --output results/quickstart
+```
+
+The command writes a registered image, correspondence tables, transformation, metrics, and visualizations under `results/quickstart/`. Run `.venv/bin/python -m pytest -q` to verify the installation. Synthetic images validate software behavior only; they are not lunar accuracy results.
+
 ## Current working scope
 
 The CLI, FastAPI service, and React dashboard run locally. Ingestion supports PDS4 image products, GeoTIFF/TIFF, PNG/JPEG, and NumPy arrays. SIFT, ORB, AKAZE, pretrained SuperPoint + LightGlue, pretrained LoFTR, and a SIFT + LoFTR hybrid feed affine or homography RANSAC. Optional illumination representations, pyramid matching, grid selection, and local sub-pixel coordinate refinement are implemented. IIRS cubes can be reduced to a PCA spatial plane or processed by band. CSV, JSON, TIFF, and PNG exports and a benchmark runner are included. TMC-2 browse quicklooks and bounded native-resolution science-image windows have been registered; full-strip processing and independent accuracy validation remain unevaluated.
+
+### Implementation status
+
+| Area | Status |
+| --- | --- |
+| PDS4, GeoTIFF/TIFF, PNG/JPEG, NumPy ingestion | Implemented and tested |
+| OHRC and TMC-2 browse/native-window baseline | Implemented; measured on supplied products |
+| IIRS PCA/band spatial representation | Implemented; full-cube registration not evaluated |
+| SIFT/ORB/AKAZE + RANSAC registration | Implemented and tested |
+| LoFTR, LightGlue, and Hybrid adapters | Optional; weights/dependencies required |
+| Trainable LunaPatchDescriptor | Implemented; multi-scene representation pretraining |
+| Independent ground-truth accuracy | Not evaluated yet |
 
 ## Architecture
 
@@ -133,6 +162,10 @@ To use the trained model in the CLI, set `LUNAMATCH_DESCRIPTOR_CHECKPOINT` to th
 
 The result directory contains `registered_image.tif`, browser PNG previews, selected `matches.csv/json`, all `candidate_matches.csv/json`, `transformation.json`, `metrics.json`, `job_log.json`, `overlay.png`, `match_visualization.png`, `error_map.png`, `confidence_map.png`, and `distribution.png`. The TIFF warps source pixels while preserving their supported numeric bit depth and copies reference CRS/transform when available; PNGs are display representations. The matrix maps **source pixels to reference pixels**. `registration_residual_rmse_px` is the RANSAC inlier reprojection residual. `ground_truth_rmse_px` is `null` because independent ground truth has not been supplied. `selected_coverage` measures occupied cells of an 8×8 reference-image grid. Confidence scores are not calibrated probabilities. The error and confidence maps show **sparse point markers**, not dense truth fields. Fractional refined coordinates are estimates; sub-pixel accuracy remains unvalidated.
 
+### Reading a result
+
+Use `inlier_ratio`, residual RMSE/median/95th percentile, and spatial coverage together. A high inlier ratio can still describe a clustered or locally overfit warp, so inspect `distribution.png` and the correspondence CSV. `registration_residual_rmse_px` measures agreement with the fitted affine/homography model; it does not measure absolute lunar position error. Only an independently surveyed or manually verified tie-point set can populate a ground-truth error metric.
+
 ## Run tests
 
 ```bash
@@ -207,6 +240,14 @@ cd frontend && npm ci && npm run dev
 
 Open `http://localhost:5173`. The dashboard uploads a source and reference, selects sensors and matcher, configures processing, shows imagery and metrics, filters all/inlier/high-confidence points, compares before and after, and downloads artifacts. Browser uploads accept PNG/JPEG/TIFF/GeoTIFF up to 100 MB by default. PDS4 labels with external binary sidecars should be processed with the local CLI; the upload endpoint does not accept XML. Uploads use temporary directories cleaned after processing. Set `LUNAMATCH_RESULTS_DIR` and `LUNAMATCH_MAX_UPLOAD_BYTES` for deployment. Jobs are synchronous and stored on disk; a queue and retention policy are future work.
 
+For the trained descriptor, configure the backend before starting it:
+
+```bash
+export LUNAMATCH_DESCRIPTOR_CHECKPOINT=results/learned/multiscene_descriptor.pt
+```
+
+Selecting **LunaPatchDescriptor (trained)** without a checkpoint returns an explicit model-unavailable response. The dashboard does not infer a sensor from pixel appearance; choose OHRC, TMC-2, or IIRS from the product provenance.
+
 API endpoints are `POST /api/v1/register`, `GET /api/v1/results/{job_id}`, `/matches`, `/candidates`, `/metrics`, `/registered-image`, and `/artifacts/{name}`. The POST body is multipart `source`, `reference`, `source_sensor`, `reference_sensor`, `matcher`, and a JSON string `preprocessing`. OpenAPI details are available at `http://127.0.0.1:8000/docs`.
 
 ## Experiments and ablation
@@ -225,3 +266,11 @@ docker compose up --build
 ```
 
 Compose exposes the API on port 8000 and dashboard on port 5173. Both images built, and a local smoke test returned API health plus the dashboard HTML. Real OHRC/TMC-2/IIRS pairs must be prepared and independently evaluated before any scientific performance claim.
+
+## Troubleshooting
+
+- **`No pyramid-level pair produced a valid transformation`**: try SIFT first, enable `--clahe`, use `--geometry affine`, or provide a smaller overlapping window.
+- **`Descriptor checkpoint does not exist`**: set `LUNAMATCH_DESCRIPTOR_CHECKPOINT` to a checkpoint produced by `train-descriptor`.
+- **LoFTR/LightGlue model unavailable**: install the optional learned dependencies and allow the first-run weight download, or use SIFT/ORB/AKAZE.
+- **Large PDS4/IIRS product rejected**: use `--window` for bounded 2D reads; full IIRS cubes are intentionally protected by the memory limit.
+- **Sensor is `UNKNOWN`**: the classifier found no authoritative product identifier or the file is synthetic. Supply the sensor explicitly for registration after checking the product label.
