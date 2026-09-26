@@ -7,7 +7,7 @@ import numpy as np
 
 
 def main() -> None:
-    """Write a deterministic crater-like translated pair for a local smoke test."""
+    """Write deterministic crater-like pairs for local registration smoke tests."""
     output = Path("data/samples")
     output.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(26166)
@@ -22,6 +22,29 @@ def main() -> None:
                                (640, 512))
     cv2.imwrite(str(output / "synthetic_source.png"), image)
     cv2.imwrite(str(output / "synthetic_reference.png"), reference)
+
+    # A moderate affine change exercises scale and viewpoint handling.
+    affine_matrix = cv2.getRotationMatrix2D((320, 256), 7.0, 1.08)
+    affine_matrix[:, 2] += (12.0, -9.0)
+    affine_reference = cv2.warpAffine(image, affine_matrix, (640, 512),
+                                      borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    cv2.imwrite(str(output / "synthetic_affine_source.png"), image)
+    cv2.imwrite(str(output / "synthetic_affine_reference.png"), affine_reference)
+
+    # A photometric pair exercises illumination normalization.
+    illumination_reference = np.clip(
+        np.power(reference.astype(np.float32) / 255.0, 0.72) * 255.0 * 0.82 + 18.0,
+        0, 255,
+    ).astype(np.uint8)
+    cv2.imwrite(str(output / "synthetic_illumination_source.png"), image)
+    cv2.imwrite(str(output / "synthetic_illumination_reference.png"), illumination_reference)
+
+    # A degraded pair exercises noise and blur handling.
+    noisy_reference = cv2.GaussianBlur(reference, (5, 5), 1.2)
+    noise = rng.normal(0, 9, noisy_reference.shape).astype(np.float32)
+    noisy_reference = np.clip(noisy_reference.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+    cv2.imwrite(str(output / "synthetic_noisy_source.png"), image)
+    cv2.imwrite(str(output / "synthetic_noisy_reference.png"), noisy_reference)
     try:
         import rasterio
         cube = np.stack((image, np.clip(image.astype(np.float32) * 0.8 + 20, 0, 255).astype(np.uint8),
@@ -31,7 +54,7 @@ def main() -> None:
             dataset.write(cube)
     except ImportError:
         print("Rasterio unavailable: skipped synthetic IIRS cube")
-    print(f"Wrote synthetic software-test pair to {output}")
+    print(f"Wrote synthetic software-test pairs to {output}")
 
 
 if __name__ == "__main__":

@@ -100,6 +100,8 @@ Generate the included **synthetic software-test pair**:
   --matcher sift --output results/sample
 ```
 
+`generate_sample.py` creates four deterministic software-test pairs in `data/samples/`: translation, affine scale/rotation, illumination change, and noise/blur. They are synthetic fixtures only and are not Chandrayaan-2 validation data.
+
 Use `--matcher orb`, `akaze`, `lightglue`, `loftr`, or `hybrid` for other methods; `--geometry affine` selects affine RANSAC. `--clahe` enables local contrast enhancement. `--config configs/default.yaml` loads supported YAML settings, and explicit CLI flags override them. The YAML also controls illumination normalization, gradients, a heuristic shadow mask, pyramid levels, IIRS PCA or band selection, grid limits, and optional sub-pixel refinement.
 
 ## Trainable descriptor
