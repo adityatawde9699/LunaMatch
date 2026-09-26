@@ -7,6 +7,7 @@ const sensors: Sensor[] = ['OHRC', 'TMC-2', 'IIRS']
 const matchers: { value: Matcher, label: string }[] = [
   { value: 'sift', label: 'SIFT baseline' }, { value: 'orb', label: 'ORB' },
   { value: 'akaze', label: 'AKAZE' }, { value: 'loftr', label: 'LoFTR' },
+  { value: 'descriptor', label: 'LunaPatchDescriptor (trained)' },
   { value: 'lightglue', label: 'SuperPoint + LightGlue' },
   { value: 'hybrid', label: 'Hybrid: SIFT + LoFTR' }
 ]

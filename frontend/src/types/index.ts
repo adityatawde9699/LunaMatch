@@ -1,5 +1,5 @@
 export type Sensor = 'OHRC' | 'TMC-2' | 'IIRS'
-export type Matcher = 'sift' | 'orb' | 'akaze' | 'loftr' | 'lightglue' | 'hybrid'
+export type Matcher = 'sift' | 'orb' | 'akaze' | 'descriptor' | 'loftr' | 'lightglue' | 'hybrid'
 
 export interface Match {
   id: number

@@ -61,7 +61,8 @@ def load_config(path: str | Path) -> RegistrationConfig:
         raise ValueError(f"Unknown configuration sections: {sorted(unknown)}")
     values = {}
     fields = {
-        "matcher": {"name": "matcher", "ratio": "ratio", "max_features": "max_features"},
+        "matcher": {"name": "matcher", "ratio": "ratio", "max_features": "max_features",
+                    "descriptor_checkpoint": "descriptor_checkpoint"},
         "preprocessing": {"clahe": "clahe", "local_normalization": "local_normalization",
                           "gradient": "gradient", "shadow_mask": "shadow_mask",
                           "pyramid_levels": "pyramid_levels", "source_band": "source_band",

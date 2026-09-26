@@ -19,7 +19,7 @@ type CompletedRun = {
 }
 
 const matcherNames: Record<Matcher, string> = {
-  sift: 'SIFT', orb: 'ORB', akaze: 'AKAZE', loftr: 'LoFTR',
+  sift: 'SIFT', orb: 'ORB', akaze: 'AKAZE', descriptor: 'LunaPatchDescriptor', loftr: 'LoFTR',
   lightglue: 'SuperPoint + LightGlue', hybrid: 'Hybrid (SIFT + LoFTR)'
 }
 
