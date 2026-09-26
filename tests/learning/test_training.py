@@ -34,3 +34,13 @@ def test_descriptor_forward_and_checkpoint(tmp_path, monkeypatch) -> None:
     features = extract_learned(image, max_features=20)
     assert features.descriptors is not None
     assert features.descriptors.shape[1] == 16
+
+
+def test_multi_scene_training_reports_scene_count(tmp_path) -> None:
+    rng = np.random.default_rng(12)
+    images = [rng.integers(0, 255, (96, 96), dtype=np.uint8),
+              rng.integers(0, 255, (96, 96), dtype=np.uint8)]
+    report = train_descriptor(images, tmp_path / "multi.pt", epochs=1,
+                              batch_size=8, samples=16, embedding_dim=16,
+                              patch_size=16, device="cpu")
+    assert report["training_images"] == 2

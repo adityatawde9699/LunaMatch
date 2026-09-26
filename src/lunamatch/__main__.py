@@ -47,7 +47,8 @@ def main() -> int:
     benchmark_cmd.add_argument("--config", required=True, type=Path)
     benchmark_cmd.add_argument("--output", required=True, type=Path)
     train_cmd = commands.add_parser("train-descriptor", help="Train the optional local patch descriptor")
-    train_cmd.add_argument("--input", required=True, type=Path)
+    train_cmd.add_argument("--input", required=True, action="append", type=Path,
+                           help="Training image; repeat for multiple scenes")
     train_cmd.add_argument("--output", required=True, type=Path)
     train_cmd.add_argument("--epochs", type=int, default=5)
     train_cmd.add_argument("--batch-size", type=int, default=64)
@@ -108,9 +109,9 @@ def main() -> int:
             from lunamatch.learning.training import train_descriptor
             from lunamatch.preprocessing.normalization import matching_gray
 
-            product = load_image(args.input, sensor=args.sensor)
+            products = [load_image(path, sensor=args.sensor) for path in args.input]
             report = train_descriptor(
-                matching_gray(product), args.output, epochs=args.epochs,
+                [matching_gray(product) for product in products], args.output, epochs=args.epochs,
                 batch_size=args.batch_size, samples=args.samples,
                 patch_size=args.patch_size, embedding_dim=args.embedding_dim,
                 learning_rate=args.learning_rate, temperature=args.temperature,

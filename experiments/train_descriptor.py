@@ -14,7 +14,8 @@ from lunamatch.learning.training import train_descriptor
 def main() -> int:
     """Train on a local image and write a checkpoint plus JSON training log."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, required=True)
+    parser.add_argument("--input", type=Path, required=True, action="append",
+                        help="Training image; repeat for multiple scenes")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -26,8 +27,8 @@ def main() -> int:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--sensor", default=None)
     args = parser.parse_args()
-    product = load_image(args.input, sensor=args.sensor)
-    gray = matching_gray(product)
+    products = [load_image(path, sensor=args.sensor) for path in args.input]
+    gray = [matching_gray(product) for product in products]
     report = train_descriptor(
         gray, args.output, epochs=args.epochs, batch_size=args.batch_size,
         samples=args.samples, patch_size=args.patch_size,

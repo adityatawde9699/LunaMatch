@@ -106,7 +106,7 @@ Use `--matcher orb`, `akaze`, `lightglue`, `loftr`, or `hybrid` for other method
 
 ## Trainable descriptor
 
-The repository includes a small trainable `LunarPatchDescriptor` for local representation pretraining. It uses a symmetric in-batch InfoNCE loss on photometric and flip augmentations, writes a PyTorch checkpoint plus a JSON training log, and reports the selected CPU/CUDA device. This model is a research component; it is not a Chandrayaan-2 accuracy result and is not silently substituted for SIFT.
+The repository includes a small trainable `LunarPatchDescriptor` for local representation pretraining. Repeat `--input` to train from multiple OHRC/TMC-2 scenes; samples are selected per scene so one image does not dominate the representation. It uses a symmetric in-batch InfoNCE loss on geometric and photometric augmentations, writes a PyTorch checkpoint plus a JSON training log, and reports the selected CPU/CUDA device and scene count. This model is a research component; it is not a Chandrayaan-2 accuracy result and is not silently substituted for SIFT.
 
 Install the optional dependencies and train on declared local pixels:
 

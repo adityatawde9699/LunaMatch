@@ -25,22 +25,26 @@ def _imports() -> tuple[Any, Any, Any]:
 class PatchAugmentationDataset:
     """Deterministic patch sampler with lunar viewpoint and illumination views."""
 
-    def __init__(self, image: np.ndarray, *, patch_size: int = 32,
+    def __init__(self, image: np.ndarray | list[np.ndarray], *, patch_size: int = 32,
                  samples: int = 2048, seed: int = 26166) -> None:
-        if image.ndim != 2:
-            raise ValueError("Training image must be a grayscale 2D array")
+        images = image if isinstance(image, list) else [image]
+        if not images or any(item.ndim != 2 for item in images):
+            raise ValueError("Training images must be non-empty grayscale 2D arrays")
         if patch_size < 16 or patch_size % 2:
             raise ValueError("patch_size must be an even value of at least 16")
-        if min(image.shape) < patch_size + 2:
+        if any(min(item.shape) < patch_size + 2 for item in images):
             raise ValueError("Training image is smaller than patch_size")
-        self.image = image.astype(np.float32) / 255.0
+        self.images = [item.astype(np.float32) / 255.0 for item in images]
         self.patch_size = patch_size
         self.samples = samples
         self.seed = seed
         self.rng = np.random.default_rng(seed)
         margin = patch_size // 2
-        self.y = self.rng.integers(margin, image.shape[0] - margin, samples)
-        self.x = self.rng.integers(margin, image.shape[1] - margin, samples)
+        self.scene = self.rng.integers(0, len(self.images), samples)
+        self.y = np.array([self.rng.integers(margin, self.images[s].shape[0] - margin)
+                           for s in self.scene])
+        self.x = np.array([self.rng.integers(margin, self.images[s].shape[1] - margin)
+                           for s in self.scene])
 
     def __len__(self) -> int:
         return self.samples
@@ -70,8 +74,9 @@ class PatchAugmentationDataset:
     def __getitem__(self, index: int) -> tuple[Any, Any]:
         torch, _, _ = _imports()
         half = self.patch_size // 2
+        scene = int(self.scene[index])
         y, x = int(self.y[index]), int(self.x[index])
-        patch = self.image[y - half:y + half, x - half:x + half]
+        patch = self.images[scene][y - half:y + half, x - half:x + half]
         first = torch.from_numpy(self._view(patch, self.seed + index * 2 + 1)).float()[None]
         second = torch.from_numpy(self._view(patch, self.seed + index * 2 + 2)).float()[None]
         return first, second
@@ -86,7 +91,7 @@ def _info_nce(z1: Any, z2: Any, temperature: float) -> Any:
             torch.nn.functional.cross_entropy(logits.T, labels)) / 2
 
 
-def train_descriptor(image: np.ndarray, output: str | Path, *, epochs: int = 5,
+def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *, epochs: int = 5,
                      batch_size: int = 64, learning_rate: float = 1e-3,
                      embedding_dim: int = 128, patch_size: int = 32,
                      samples: int = 2048, temperature: float = 0.1,
@@ -144,6 +149,7 @@ def train_descriptor(image: np.ndarray, output: str | Path, *, epochs: int = 5,
         "checkpoint": str(destination), "model": "LunarPatchDescriptor",
         "training_objective": "symmetric in-batch InfoNCE under geometric/photometric lunar-view augmentation",
         "epochs": epochs, "batch_size": batch_size, "samples": samples,
+        "training_images": len(image) if isinstance(image, list) else 1,
         "embedding_dim": embedding_dim, "patch_size": patch_size,
         "device": selected, "seed": seed, "history": history,
         "alignment_top1": alignment_top1,
