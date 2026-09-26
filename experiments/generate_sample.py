@@ -1,14 +1,14 @@
-"""Generate a software-test pair; it is not Chandrayaan-2 imagery."""
+"""Generate software-test pairs and exact synthetic tie points."""
 
+import csv
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 
-def main() -> None:
-    """Write deterministic crater-like pairs for local registration smoke tests."""
-    output = Path("data/samples")
+def generate_samples(output: Path) -> None:
+    """Write deterministic synthetic pairs and known-transform control points."""
     output.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(26166)
     image = rng.normal(110, 22, (512, 640)).clip(0, 255).astype(np.uint8)
@@ -22,6 +22,15 @@ def main() -> None:
                                (640, 512))
     cv2.imwrite(str(output / "synthetic_source.png"), image)
     cv2.imwrite(str(output / "synthetic_reference.png"), reference)
+    truth = output / "synthetic_translation_tie_points.csv"
+    with truth.open("w", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("id", "source_x", "source_y", "reference_x", "reference_y"))
+        for identifier, (x, y) in enumerate(((90, 100), (200, 100), (320, 100),
+                                             (500, 100), (90, 250), (200, 250),
+                                             (320, 250), (500, 250), (90, 400),
+                                             (200, 400), (320, 400), (500, 400)), start=1):
+            writer.writerow((identifier, x, y, x + 23, y - 14))
 
     # A moderate affine change exercises scale and viewpoint handling.
     affine_matrix = cv2.getRotationMatrix2D((320, 256), 7.0, 1.08)
@@ -55,6 +64,11 @@ def main() -> None:
     except ImportError:
         print("Rasterio unavailable: skipped synthetic IIRS cube")
     print(f"Wrote synthetic software-test pairs to {output}")
+
+
+def main() -> None:
+    """Generate local sample files in the default development directory."""
+    generate_samples(Path("data/samples"))
 
 
 if __name__ == "__main__":

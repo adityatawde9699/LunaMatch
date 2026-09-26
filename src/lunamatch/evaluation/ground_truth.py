@@ -43,11 +43,14 @@ def validate_points(rows: list[dict[str, Any]]) -> list[dict[str, float | str]]:
 
 def load_points_csv(path: str | Path) -> list[dict[str, float | str]]:
     """Read independent source/reference coordinate pairs from CSV."""
-    with Path(path).open(newline="", encoding="utf-8-sig") as stream:
-        reader = csv.DictReader(stream)
-        if not reader.fieldnames or not set(FIELDS).issubset(reader.fieldnames):
-            raise ValueError(f"Tie-point CSV requires columns: {', '.join(FIELDS)}")
-        return validate_points(list(reader))
+    try:
+        with Path(path).open(newline="", encoding="utf-8-sig") as stream:
+            reader = csv.DictReader(stream)
+            if not reader.fieldnames or not set(FIELDS).issubset(reader.fieldnames):
+                raise ValueError(f"Tie-point CSV requires columns: {', '.join(FIELDS)}")
+            return validate_points(list(reader))
+    except FileNotFoundError as exc:
+        raise ValueError(f"Tie-point CSV not found: {path}. Use a real CSV path or export points from the dashboard.") from exc
 
 
 def evaluate_points(matrix: np.ndarray, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -80,7 +83,11 @@ def evaluate_points(matrix: np.ndarray, rows: list[dict[str, Any]]) -> dict[str,
 def evaluate_run(run_dir: str | Path, rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Evaluate a saved registration without changing its fitted metrics."""
     run = Path(run_dir)
-    payload = json.loads((run / "transformation.json").read_text())
+    transform_path = run / "transformation.json"
+    try:
+        payload = json.loads(transform_path.read_text())
+    except FileNotFoundError as exc:
+        raise ValueError(f"Saved transformation not found: {transform_path}. Run registration first.") from exc
     if payload.get("direction") != "source_to_reference_pixels":
         raise ValueError("Saved transformation has an unsupported direction")
     report = evaluate_points(np.asarray(payload["matrix"]), rows)

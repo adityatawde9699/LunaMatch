@@ -10,6 +10,7 @@ from PIL import Image
 from lunamatch.evaluation.ground_truth import (
     evaluate_points, load_points_csv, save_evaluation,
 )
+from experiments.generate_sample import generate_samples
 
 
 def test_independent_points_measure_fixed_transform(tmp_path) -> None:
@@ -42,3 +43,13 @@ def test_reject_duplicate_and_nonfinite_points() -> None:
         evaluate_points(np.eye(3), [row, row])
     with pytest.raises(ValueError, match="finite"):
         evaluate_points(np.eye(3), [{**row, "source_x": float("nan")}])
+
+
+def test_generated_synthetic_truth_and_missing_csv(tmp_path) -> None:
+    generate_samples(tmp_path)
+    points = load_points_csv(tmp_path / "synthetic_translation_tie_points.csv")
+    matrix = np.array([[1, 0, 23], [0, 1, -14], [0, 0, 1]])
+    assert len(points) == 12
+    assert evaluate_points(matrix, points)["ground_truth_rmse_px"] == pytest.approx(0)
+    with pytest.raises(ValueError, match="Tie-point CSV not found"):
+        load_points_csv(tmp_path / "missing.csv")

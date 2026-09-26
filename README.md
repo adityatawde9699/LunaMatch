@@ -138,7 +138,7 @@ Generate the included **synthetic software-test pair**:
   --matcher sift --output results/sample
 ```
 
-`generate_sample.py` creates four deterministic software-test pairs in `data/samples/`: translation, affine scale/rotation, illumination change, and noise/blur. They are synthetic fixtures only and are not Chandrayaan-2 validation data.
+`generate_sample.py` creates four deterministic software-test pairs in `data/samples/`: translation, affine scale/rotation, illumination change, and noise/blur. It also writes `synthetic_translation_tie_points.csv` with exact control points for the translated pair. They are synthetic fixtures only and are not Chandrayaan-2 validation data.
 
 Use `--matcher orb`, `akaze`, `lightglue`, `loftr`, or `hybrid` for other methods; `--geometry affine` selects affine RANSAC. `--clahe` enables local contrast enhancement. `--config configs/default.yaml` loads supported YAML settings, and explicit CLI flags override them. The YAML also controls illumination normalization, gradients, a heuristic shadow mask, pyramid levels, IIRS PCA or band selection, grid limits, and optional sub-pixel refinement.
 
@@ -178,12 +178,20 @@ id,source_x,source_y,reference_x,reference_y
 2,640.00,310.25,912.50,428.75
 ```
 
-Evaluate an existing run from the CLI:
+For a runnable synthetic example from the repository root:
 
 ```bash
+.venv/bin/python experiments/generate_sample.py
+.venv/bin/python -m lunamatch register \
+  --source data/samples/synthetic_source.png \
+  --reference data/samples/synthetic_reference.png \
+  --matcher sift --output results/ground_truth_demo
 .venv/bin/python -m lunamatch evaluate-ground-truth \
-  --run results/sample --points path/to/independent_tie_points.csv
+  --run results/ground_truth_demo \
+  --points data/samples/synthetic_translation_tie_points.csv
 ```
+
+For real lunar images, export manually annotated CSV points from the dashboard and replace both paths with your actual run directory and CSV path. The synthetic file above is generated from a known translation; it is a software test, not a real lunar accuracy claim.
 
 The output is `ground_truth_points.csv` and `ground_truth_evaluation.json` in the run directory. It reports RMSE, median, 95th percentile, maximum, and per-point errors in reference pixels. The original `metrics.json` retains its fitted residual and `ground_truth_rmse_px: null`; the separate report identifies annotations as `user_supplied_unverified`. The API also accepts `POST /api/v1/results/{job_id}/ground-truth` with JSON `{ "points": [...] }` and returns the same evaluation; `GET` at that path retrieves it. Never use the pipeline's own `matches.csv` as independent truth.
 
