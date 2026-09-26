@@ -89,6 +89,15 @@ Products are placed under `data/<data-level>/<sensor>/<archive-name>/` with a ma
 
 ## Run the classical baseline
 
+Classify official samples from their product provenance (synthetic fixtures intentionally return `UNKNOWN`):
+
+```bash
+.venv/bin/python -m lunamatch classify \
+  --input data/calibrated/OHRC/example.png \
+  --input data/calibrated/TMC-2/example.png \
+  --input data/derived/IIRS/example.qub
+```
+
 Generate the included **synthetic software-test pair**:
 
 ```bash

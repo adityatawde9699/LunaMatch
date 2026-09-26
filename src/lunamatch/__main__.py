@@ -21,6 +21,9 @@ def main() -> int:
     inspect.add_argument("--preview", type=Path)
     inspect.add_argument("--band", type=int, default=0)
     inspect.add_argument("--window", type=int, nargs=4, metavar=("X", "Y", "WIDTH", "HEIGHT"))
+    classify = commands.add_parser("classify", help="Classify sensor from product provenance")
+    classify.add_argument("--input", required=True, action="append", type=Path,
+                          help="Product/image path; repeat for multiple inputs")
     inspect_product = commands.add_parser(
         "inspect-product", help="Inventory a PRADAN product ZIP without extracting it")
     inspect_product.add_argument("--input", required=True, type=Path)
@@ -61,6 +64,10 @@ def main() -> int:
     train_cmd.add_argument("--sensor", default=None)
     args = parser.parse_args()
     try:
+        if args.command == "classify":
+            from lunamatch.ingestion.classification import classify_sensor
+            print(json.dumps([classify_sensor(path) for path in args.input], indent=2))
+            return 0
         if args.command == "inspect":
             product = load_image(args.input, sensor=args.sensor, data_level=args.data_level,
                                  window=tuple(args.window) if args.window else None)
