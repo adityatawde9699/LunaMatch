@@ -41,6 +41,18 @@ def test_upload_register_and_fetch(monkeypatch, tmp_path) -> None:
             assert (await client.get(f"/api/v1/results/{job}/registered-image")).status_code == 200
             assert (await client.get(f"/api/v1/results/{job}/artifacts/overlay.png")).status_code == 200
             assert (await client.get(f"/api/v1/results/{job}/artifacts/nope.py")).status_code == 404
+            independent = {"points": [
+                {"id": "manual-1", "source_x": 20, "source_y": 20,
+                 "reference_x": 29, "reference_y": 14},
+                {"id": "manual-2", "source_x": 70, "source_y": 80,
+                 "reference_x": 79, "reference_y": 74},
+            ]}
+            assessment = await client.post(f"/api/v1/results/{job}/ground-truth", json=independent)
+            assert assessment.status_code == 200, assessment.text
+            assert assessment.json()["ground_truth_rmse_px"] < 1
+            assert (await client.get(f"/api/v1/results/{job}/ground-truth")).status_code == 200
+            assert (await client.get(f"/api/v1/results/{job}/artifacts/ground_truth_points.csv")).status_code == 200
+            assert (await client.get(f"/api/v1/results/{job}/metrics")).json()["ground_truth_rmse_px"] is None
     asyncio.run(exercise())
 
 

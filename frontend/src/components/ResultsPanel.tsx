@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import MatchCanvas from './MatchCanvas'
+import GroundTruthAnnotator from './GroundTruthAnnotator'
 import type { JobResult, JobSummary, Match, Matcher, RegistrationOptions, Sensor } from '../types'
 
 const panels = [
@@ -93,6 +94,8 @@ export default function ResultsPanel({ summary, result, matches, run }: {
         {artifact(name) ? <img src={artifact(name)} alt={label} loading="lazy" />
           : <div className="artifact-unavailable">This visualization is unavailable for the run.</div>}</div>)}</div>
     <div className="panel"><MatchCanvas imageUrl={artifact('reference_preview.png')} matches={matches} /></div>
+    <GroundTruthAnnotator key={summary.job_id} jobId={summary.job_id}
+      sourceUrl={artifact('source_preview.png')} referenceUrl={artifact('reference_preview.png')} />
 
     <div className="exports panel"><div><h3>Export results</h3><p>Registered GeoTIFF pixels, selected correspondences, metrics, and visual evidence.</p></div>
       <div className="export-buttons">

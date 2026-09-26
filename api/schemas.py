@@ -29,3 +29,19 @@ class RegistrationOptions(BaseModel):
     def to_config(self, matcher: str) -> RegistrationConfig:
         """Convert an API request into pipeline configuration."""
         return RegistrationConfig(matcher=matcher, **self.model_dump())
+
+
+class GroundTruthPoint(BaseModel):
+    """One independently marked source/reference image point pair."""
+
+    id: str | int
+    source_x: float = Field(ge=0)
+    source_y: float = Field(ge=0)
+    reference_x: float = Field(ge=0)
+    reference_y: float = Field(ge=0)
+
+
+class GroundTruthSubmission(BaseModel):
+    """User supplied tie points for evaluation of a saved transform."""
+
+    points: list[GroundTruthPoint] = Field(min_length=1, max_length=10000)

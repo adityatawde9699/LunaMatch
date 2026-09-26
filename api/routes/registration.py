@@ -11,7 +11,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import ValidationError
 
-from api.schemas import RegistrationOptions
+from api.schemas import GroundTruthSubmission, RegistrationOptions
+from lunamatch.evaluation.ground_truth import save_evaluation
 from lunamatch.ingestion import load_image
 from lunamatch.ingestion.validators import ImageLoadError
 from lunamatch.pipeline.registration import register as register_images
@@ -24,6 +25,7 @@ ARTIFACTS = {"registered_image.tif", "registered_preview.png", "source_preview.p
              "distribution.png",
              "matches.csv", "matches.json", "candidate_matches.csv", "candidate_matches.json",
              "metrics.json", "transformation.json", "job_log.json"}
+ARTIFACTS.update({"ground_truth_points.csv", "ground_truth_evaluation.json"})
 
 
 def _results_root() -> Path:
@@ -124,6 +126,25 @@ async def get_candidates(job_id: str) -> list[dict]:
 async def get_metrics(job_id: str) -> dict:
     """Return measured metrics with explicit residual semantics."""
     return json.loads((_job_dir(job_id) / "metrics.json").read_text())
+
+
+@router.post("/results/{job_id}/ground-truth")
+async def post_ground_truth(job_id: str, submission: GroundTruthSubmission) -> dict:
+    """Evaluate independently marked points against the saved, fixed transform."""
+    directory = _job_dir(job_id)
+    try:
+        return save_evaluation(directory, [point.model_dump() for point in submission.points])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/results/{job_id}/ground-truth")
+async def get_ground_truth(job_id: str) -> dict:
+    """Return the most recently submitted point evaluation for a job."""
+    path = _job_dir(job_id) / "ground_truth_evaluation.json"
+    if not path.is_file():
+        raise HTTPException(404, "No independent tie-point evaluation for this job")
+    return json.loads(path.read_text())
 
 
 @router.get("/results/{job_id}/registered-image")

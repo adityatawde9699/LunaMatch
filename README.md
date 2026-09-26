@@ -166,6 +166,27 @@ The result directory contains `registered_image.tif`, browser PNG previews, sele
 
 Use `inlier_ratio`, residual RMSE/median/95th percentile, and spatial coverage together. A high inlier ratio can still describe a clustered or locally overfit warp, so inspect `distribution.png` and the correspondence CSV. `registration_residual_rmse_px` measures agreement with the fitted affine/homography model; it does not measure absolute lunar position error. Only an independently surveyed or manually verified tie-point set can populate a ground-truth error metric.
 
+### Independent tie-point evaluation
+
+After registration, open the dashboard's **Independent tie points** panel. Click a feature in the source and the same feature in the reference. The panel marks each pair, supports undo and CSV export, and evaluates the saved transformation without fitting it again. Coordinates refer to the saved source and reference preview pixels; for windowed registrations they are crop-local. Use clearly identifiable features spread across the shared terrain. Have a second annotator review the points before treating them as verified ground truth.
+
+The CSV format is:
+
+```csv
+id,source_x,source_y,reference_x,reference_y
+1,153.25,82.50,421.75,201.00
+2,640.00,310.25,912.50,428.75
+```
+
+Evaluate an existing run from the CLI:
+
+```bash
+.venv/bin/python -m lunamatch evaluate-ground-truth \
+  --run results/sample --points path/to/independent_tie_points.csv
+```
+
+The output is `ground_truth_points.csv` and `ground_truth_evaluation.json` in the run directory. It reports RMSE, median, 95th percentile, maximum, and per-point errors in reference pixels. The original `metrics.json` retains its fitted residual and `ground_truth_rmse_px: null`; the separate report identifies annotations as `user_supplied_unverified`. The API also accepts `POST /api/v1/results/{job_id}/ground-truth` with JSON `{ "points": [...] }` and returns the same evaluation; `GET` at that path retrieves it. Never use the pipeline's own `matches.csv` as independent truth.
+
 ## Run tests
 
 ```bash

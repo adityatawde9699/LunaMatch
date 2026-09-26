@@ -1,4 +1,4 @@
-import type { JobResult, JobSummary, Match, Matcher, RegistrationOptions, Sensor } from '../types'
+import type { GroundTruthEvaluation, GroundTruthPoint, JobResult, JobSummary, Match, Matcher, RegistrationOptions, Sensor } from '../types'
 
 export async function registerImages(
   source: File,
@@ -33,4 +33,16 @@ export async function fetchCandidates(jobId: string): Promise<Match[]> {
   const response = await fetch(`/api/v1/results/${jobId}/candidates`)
   if (!response.ok) throw new Error(`Unable to load matches (${response.status})`)
   return response.json() as Promise<Match[]>
+}
+
+export async function evaluateGroundTruth(jobId: string, points: GroundTruthPoint[]): Promise<GroundTruthEvaluation> {
+  const response = await fetch(`/api/v1/results/${jobId}/ground-truth`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ points })
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.detail || `Tie-point evaluation failed (${response.status})`)
+  }
+  return response.json() as Promise<GroundTruthEvaluation>
 }

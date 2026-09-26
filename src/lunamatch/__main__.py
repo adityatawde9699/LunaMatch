@@ -49,6 +49,9 @@ def main() -> int:
     benchmark_cmd = commands.add_parser("benchmark", help="Run a declared experiment matrix")
     benchmark_cmd.add_argument("--config", required=True, type=Path)
     benchmark_cmd.add_argument("--output", required=True, type=Path)
+    evaluate_cmd = commands.add_parser("evaluate-ground-truth", help="Evaluate a saved transform against independent tie points")
+    evaluate_cmd.add_argument("--run", required=True, type=Path, help="Saved registration result directory")
+    evaluate_cmd.add_argument("--points", required=True, type=Path, help="CSV with id,source_x,source_y,reference_x,reference_y")
     train_cmd = commands.add_parser("train-descriptor", help="Train the optional local patch descriptor")
     train_cmd.add_argument("--input", required=True, action="append", type=Path,
                            help="Training image; repeat for multiple scenes")
@@ -111,6 +114,12 @@ def main() -> int:
             rows = run_benchmark(args.config, args.output)
             print(json.dumps({"output": str(args.output), "runs": len(rows),
                               "completed": sum(row["status"] == "completed" for row in rows)}, indent=2))
+            return 0
+        if args.command == "evaluate-ground-truth":
+            from lunamatch.evaluation.ground_truth import load_points_csv, save_evaluation
+
+            report = save_evaluation(args.run, load_points_csv(args.points))
+            print(json.dumps(report, indent=2))
             return 0
         if args.command == "train-descriptor":
             from lunamatch.learning.training import train_descriptor

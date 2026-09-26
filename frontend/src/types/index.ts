@@ -49,3 +49,20 @@ export interface JobResult {
   metrics: Record<string, number | string | null | boolean | number[][]>
   artifacts: Record<string, string>
 }
+
+export interface GroundTruthPoint {
+  id: number
+  source_x: number
+  source_y: number
+  reference_x: number
+  reference_y: number
+}
+
+export interface GroundTruthEvaluation {
+  point_count: number
+  ground_truth_rmse_px: number
+  ground_truth_median_px: number
+  ground_truth_p95_px: number
+  ground_truth_max_px: number
+  annotation_provenance: string
+}
