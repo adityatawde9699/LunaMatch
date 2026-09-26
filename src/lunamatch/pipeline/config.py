@@ -11,6 +11,7 @@ class RegistrationConfig:
     """Parameters for the current SIFT baseline."""
 
     matcher: str = "sift"
+    descriptor_checkpoint: str | None = None
     geometry_model: str = "homography"
     ransac_threshold: float = 3.0
     ransac_confidence: float = 0.99
@@ -34,7 +35,7 @@ class RegistrationConfig:
 
     def __post_init__(self) -> None:
         """Reject parameter combinations that cannot be run meaningfully."""
-        if self.matcher not in ("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"):
+        if self.matcher not in ("sift", "orb", "akaze", "descriptor", "loftr", "lightglue", "hybrid"):
             raise ValueError(f"Unsupported matcher: {self.matcher}")
         if self.geometry_model not in ("affine", "homography"):
             raise ValueError(f"Unsupported geometry model: {self.geometry_model}")

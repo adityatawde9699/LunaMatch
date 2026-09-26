@@ -102,6 +102,22 @@ Generate the included **synthetic software-test pair**:
 
 Use `--matcher orb`, `akaze`, `lightglue`, `loftr`, or `hybrid` for other methods; `--geometry affine` selects affine RANSAC. `--clahe` enables local contrast enhancement. `--config configs/default.yaml` loads supported YAML settings, and explicit CLI flags override them. The YAML also controls illumination normalization, gradients, a heuristic shadow mask, pyramid levels, IIRS PCA or band selection, grid limits, and optional sub-pixel refinement.
 
+## Trainable descriptor
+
+The repository includes a small trainable `LunarPatchDescriptor` for local representation pretraining. It uses a symmetric in-batch InfoNCE loss on photometric and flip augmentations, writes a PyTorch checkpoint plus a JSON training log, and reports the selected CPU/CUDA device. This model is a research component; it is not a Chandrayaan-2 accuracy result and is not silently substituted for SIFT.
+
+Install the optional dependencies and train on declared local pixels:
+
+```bash
+pip install -e '.[learned]'
+python -m lunamatch train-descriptor \
+  --input data/samples/synthetic_source.png \
+  --output results/descriptor_pretraining/lunar_patch_descriptor.pt \
+  --epochs 5 --samples 2048 --device auto
+```
+
+The same implementation is available as `experiments/train_descriptor.py`. Use the configuration template at `experiments/configs/train_descriptor.yaml` when building a reproducible run. The current training objective learns augmentation-stable patch embeddings; supervised correspondence fine-tuning requires labeled tie points or known transformations and remains pending.
+
 The result directory contains `registered_image.tif`, browser PNG previews, selected `matches.csv/json`, all `candidate_matches.csv/json`, `transformation.json`, `metrics.json`, `job_log.json`, `overlay.png`, `match_visualization.png`, `error_map.png`, `confidence_map.png`, and `distribution.png`. The TIFF warps source pixels while preserving their supported numeric bit depth and copies reference CRS/transform when available; PNGs are display representations. The matrix maps **source pixels to reference pixels**. `registration_residual_rmse_px` is the RANSAC inlier reprojection residual. `ground_truth_rmse_px` is `null` because independent ground truth has not been supplied. `selected_coverage` measures occupied cells of an 8×8 reference-image grid. Confidence scores are not calibrated probabilities. The error and confidence maps show **sparse point markers**, not dense truth fields. Fractional refined coordinates are estimates; sub-pixel accuracy remains unvalidated.
 
 ## Run tests

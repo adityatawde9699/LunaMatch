@@ -13,6 +13,7 @@ from lunamatch.evaluation.visualization import match_visualization
 from lunamatch.features.sift import extract_sift
 from lunamatch.features.orb import extract_orb
 from lunamatch.features.akaze import extract_akaze
+from lunamatch.features.learned_descriptor import extract_learned
 from lunamatch.geometry.ransac import GeometryError, estimate_transform
 from lunamatch.geometry.warping import warp_source
 from lunamatch.ingestion.metadata import LunarImage
@@ -38,7 +39,12 @@ def _classical_multiscale(src: np.ndarray, ref: np.ndarray,
                           src_mask: np.ndarray, ref_mask: np.ndarray,
                           config: RegistrationConfig) -> tuple[Correspondences, int, int]:
     """Try all configured pyramid-level pairs and keep most RANSAC inliers."""
-    extractor = {"sift": extract_sift, "orb": extract_orb, "akaze": extract_akaze}[config.matcher]
+    extractor = {"sift": extract_sift, "orb": extract_orb, "akaze": extract_akaze,
+                 "descriptor": extract_learned}[config.matcher]
+    if config.matcher == "descriptor" and config.descriptor_checkpoint:
+        extractor = lambda image, mask, max_features: extract_learned(
+            image, mask, max_features, checkpoint=config.descriptor_checkpoint
+        )
     src_levels = build_pyramid(src, config.pyramid_levels)
     ref_levels = build_pyramid(ref, config.pyramid_levels)
     source_features = []
@@ -83,7 +89,8 @@ def register(source: LunarImage, reference: LunarImage,
     """Register two images with the working classical baseline."""
     started = perf_counter()
     config = config or RegistrationConfig()
-    extractors = {"sift": extract_sift, "orb": extract_orb, "akaze": extract_akaze}
+    extractors = {"sift": extract_sift, "orb": extract_orb, "akaze": extract_akaze,
+                  "descriptor": extract_learned}
     if config.matcher not in (*extractors, "loftr", "lightglue", "hybrid"):
         raise ValueError(f"Matcher is unavailable in this milestone: {config.matcher}")
     if config.iirs_mode not in ("pca", "band"):

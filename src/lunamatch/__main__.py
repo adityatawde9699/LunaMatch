@@ -38,7 +38,7 @@ def main() -> int:
                               metavar=("X", "Y", "WIDTH", "HEIGHT"))
     register_cmd.add_argument("--source-sensor", default=None)
     register_cmd.add_argument("--reference-sensor", default=None)
-    register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "loftr", "lightglue", "hybrid"))
+    register_cmd.add_argument("--matcher", choices=("sift", "orb", "akaze", "descriptor", "loftr", "lightglue", "hybrid"))
     register_cmd.add_argument("--geometry", choices=("homography", "affine"))
     register_cmd.add_argument("--clahe", action="store_true")
     register_cmd.add_argument("--config", type=Path)
@@ -46,6 +46,18 @@ def main() -> int:
     benchmark_cmd = commands.add_parser("benchmark", help="Run a declared experiment matrix")
     benchmark_cmd.add_argument("--config", required=True, type=Path)
     benchmark_cmd.add_argument("--output", required=True, type=Path)
+    train_cmd = commands.add_parser("train-descriptor", help="Train the optional local patch descriptor")
+    train_cmd.add_argument("--input", required=True, type=Path)
+    train_cmd.add_argument("--output", required=True, type=Path)
+    train_cmd.add_argument("--epochs", type=int, default=5)
+    train_cmd.add_argument("--batch-size", type=int, default=64)
+    train_cmd.add_argument("--samples", type=int, default=2048)
+    train_cmd.add_argument("--patch-size", type=int, default=32)
+    train_cmd.add_argument("--embedding-dim", type=int, default=128)
+    train_cmd.add_argument("--learning-rate", type=float, default=1e-3)
+    train_cmd.add_argument("--temperature", type=float, default=0.1)
+    train_cmd.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
+    train_cmd.add_argument("--sensor", default=None)
     args = parser.parse_args()
     try:
         if args.command == "inspect":
@@ -91,6 +103,20 @@ def main() -> int:
             rows = run_benchmark(args.config, args.output)
             print(json.dumps({"output": str(args.output), "runs": len(rows),
                               "completed": sum(row["status"] == "completed" for row in rows)}, indent=2))
+            return 0
+        if args.command == "train-descriptor":
+            from lunamatch.learning.training import train_descriptor
+            from lunamatch.preprocessing.normalization import matching_gray
+
+            product = load_image(args.input, sensor=args.sensor)
+            report = train_descriptor(
+                matching_gray(product), args.output, epochs=args.epochs,
+                batch_size=args.batch_size, samples=args.samples,
+                patch_size=args.patch_size, embedding_dim=args.embedding_dim,
+                learning_rate=args.learning_rate, temperature=args.temperature,
+                device=args.device,
+            )
+            print(json.dumps(report, indent=2))
             return 0
     except (ImageLoadError, ValueError, RuntimeError) as exc:
         parser.exit(2, f"lunamatch: {exc}\n")

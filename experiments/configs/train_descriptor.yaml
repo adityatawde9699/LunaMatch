@@ -1,0 +1,12 @@
+name: lunar_patch_descriptor_pretraining
+model: LunarPatchDescriptor
+training:
+  epochs: 5
+  batch_size: 64
+  samples: 2048
+  patch_size: 32
+  embedding_dim: 128
+  learning_rate: 0.001
+  temperature: 0.1
+  device: auto
+validation: "representation pretraining only; registration accuracy must be measured separately"
