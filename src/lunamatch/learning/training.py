@@ -23,7 +23,7 @@ def _imports() -> tuple[Any, Any, Any]:
 
 
 class PatchAugmentationDataset:
-    """Deterministic patch sampler with illumination and noise augmentations."""
+    """Deterministic patch sampler with lunar viewpoint and illumination views."""
 
     def __init__(self, image: np.ndarray, *, patch_size: int = 32,
                  samples: int = 2048, seed: int = 26166) -> None:
@@ -36,6 +36,7 @@ class PatchAugmentationDataset:
         self.image = image.astype(np.float32) / 255.0
         self.patch_size = patch_size
         self.samples = samples
+        self.seed = seed
         self.rng = np.random.default_rng(seed)
         margin = patch_size // 2
         self.y = self.rng.integers(margin, image.shape[0] - margin, samples)
@@ -44,19 +45,35 @@ class PatchAugmentationDataset:
     def __len__(self) -> int:
         return self.samples
 
+    def _view(self, patch: np.ndarray, seed: int) -> np.ndarray:
+        """Create a small geometric and photometric variant of one patch."""
+        rng = np.random.default_rng(seed)
+        size = self.patch_size
+        center = (size / 2.0 - 0.5, size / 2.0 - 0.5)
+        angle = float(rng.uniform(-25.0, 25.0))
+        scale = float(rng.uniform(0.88, 1.12))
+        matrix = cv2.getRotationMatrix2D(center, angle, scale)
+        matrix[:, 2] += rng.uniform(-2.0, 2.0, size=2)
+        view = cv2.warpAffine(patch, matrix, (size, size), flags=cv2.INTER_LINEAR,
+                              borderMode=cv2.BORDER_REFLECT101)
+        if rng.random() < 0.5:
+            view = np.flip(view, axis=1)
+        if rng.random() < 0.25:
+            view = cv2.GaussianBlur(view, (3, 3), 0.0)
+        gain = float(rng.uniform(0.70, 1.30))
+        bias = float(rng.uniform(-0.15, 0.15))
+        gamma = float(rng.uniform(0.85, 1.20))
+        view = np.power(np.clip(view * gain + bias, 0.0, 1.0), gamma)
+        view += rng.normal(0.0, 0.025, view.shape).astype(np.float32)
+        return np.clip(view, 0.0, 1.0).copy()
+
     def __getitem__(self, index: int) -> tuple[Any, Any]:
         torch, _, _ = _imports()
         half = self.patch_size // 2
         y, x = int(self.y[index]), int(self.x[index])
         patch = self.image[y - half:y + half, x - half:x + half]
-        first = torch.from_numpy(patch.copy()).float()[None]
-        second = first.clone()
-        if index % 2:
-            second = torch.flip(second, dims=(1,))
-        gain = 0.75 + 0.5 * ((index * 1103515245 + 12345) % 1000) / 1000
-        bias = -0.12 + 0.24 * ((index * 214013 + 2531011) % 1000) / 1000
-        noise = torch.randn_like(second) * 0.025
-        second = (second * gain + bias + noise).clamp(0.0, 1.0)
+        first = torch.from_numpy(self._view(patch, self.seed + index * 2 + 1)).float()[None]
+        second = torch.from_numpy(self._view(patch, self.seed + index * 2 + 2)).float()[None]
         return first, second
 
 
@@ -110,17 +127,27 @@ def train_descriptor(image: np.ndarray, output: str | Path, *, epochs: int = 5,
             total += float(loss.detach().cpu())
             batches += 1
         history.append({"epoch": epoch + 1, "loss": total / max(batches, 1)})
+    model.eval()
+    correct = total_pairs = 0
+    with torch.inference_mode():
+        for first, second in loader:
+            z1, z2 = model(first.to(selected)), model(second.to(selected))
+            predictions = (z1 @ z2.T).argmax(dim=1)
+            correct += int((predictions == torch.arange(len(predictions), device=predictions.device)).sum())
+            total_pairs += len(predictions)
+    alignment_top1 = correct / max(total_pairs, 1)
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"model_state": model.state_dict(), "embedding_dim": embedding_dim,
                 "patch_size": patch_size, "model": "LunarPatchDescriptor"}, destination)
     report = {
         "checkpoint": str(destination), "model": "LunarPatchDescriptor",
-        "training_objective": "symmetric in-batch InfoNCE under photometric/flip augmentation",
+        "training_objective": "symmetric in-batch InfoNCE under geometric/photometric lunar-view augmentation",
         "epochs": epochs, "batch_size": batch_size, "samples": samples,
         "embedding_dim": embedding_dim, "patch_size": patch_size,
         "device": selected, "seed": seed, "history": history,
-        "validation": "representation pretraining only; registration accuracy not evaluated",
+        "alignment_top1": alignment_top1,
+        "validation": "augmentation-pair retrieval only; registration accuracy not evaluated",
     }
     destination.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
     return report

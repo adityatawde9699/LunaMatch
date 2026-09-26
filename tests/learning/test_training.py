@@ -27,7 +27,8 @@ def test_descriptor_forward_and_checkpoint(tmp_path, monkeypatch) -> None:
     assert report["device"] == "cpu"
     assert (tmp_path / "descriptor.pt").is_file()
     log = json.loads((tmp_path / "descriptor.json").read_text())
-    assert log["validation"].startswith("representation pretraining")
+    assert log["validation"].startswith("augmentation-pair retrieval")
+    assert 0.0 <= report["alignment_top1"] <= 1.0
 
     monkeypatch.setenv("LUNAMATCH_DESCRIPTOR_CHECKPOINT", str(tmp_path / "descriptor.pt"))
     features = extract_learned(image, max_features=20)

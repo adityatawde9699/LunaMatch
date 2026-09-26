@@ -116,7 +116,7 @@ python -m lunamatch train-descriptor \
   --epochs 5 --samples 2048 --device auto
 ```
 
-The same implementation is available as `experiments/train_descriptor.py`. Use the configuration template at `experiments/configs/train_descriptor.yaml` when building a reproducible run. The current training objective learns augmentation-stable patch embeddings; supervised correspondence fine-tuning requires labeled tie points or known transformations and remains pending.
+The same implementation is available as `experiments/train_descriptor.py`. Use the configuration template at `experiments/configs/train_descriptor.yaml` when building a reproducible run. Training now creates paired local views with small rotation, scale, translation, blur, contrast, gamma, shadow-like bias, and noise changes, then optimizes symmetric in-batch InfoNCE. The report includes augmentation-pair retrieval (`alignment_top1`); this is a training diagnostic, not registration accuracy. Supervised correspondence fine-tuning requires labeled tie points or known transformations and remains pending.
 
 To use the trained model in the CLI, set `LUNAMATCH_DESCRIPTOR_CHECKPOINT` to the checkpoint path and select `--matcher descriptor`. The FastAPI and React interfaces expose the same **LunaPatchDescriptor (trained)** matcher; configure the API process with that environment variable before selecting it in the dashboard. If no checkpoint is configured, the API returns a clear unavailable-model error rather than silently falling back to a classical matcher.
 
