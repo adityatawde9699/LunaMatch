@@ -13,7 +13,7 @@ from lunamatch.evaluation.visualization import match_visualization
 from lunamatch.features.sift import extract_sift
 from lunamatch.features.orb import extract_orb
 from lunamatch.features.akaze import extract_akaze
-from lunamatch.features.learned_descriptor import extract_learned
+from lunamatch.features.learned_descriptor import descriptor_device, extract_learned
 from lunamatch.geometry.ransac import GeometryError, estimate_transform
 from lunamatch.geometry.warping import warp_source
 from lunamatch.ingestion.metadata import LunarImage
@@ -128,7 +128,7 @@ def register(source: LunarImage, reference: LunarImage,
     else:
         matches, source_keypoints, reference_keypoints = _classical_multiscale(
             src, ref, src_mask, ref_mask, config)
-        device = "cpu"
+        device = descriptor_device() if config.matcher == "descriptor" else "cpu"
     try:
         geometry = estimate_transform(matches, model=config.geometry_model,
                                       threshold=config.ransac_threshold,
@@ -137,11 +137,7 @@ def register(source: LunarImage, reference: LunarImage,
         raise GeometryError(f"Registration failed after {len(matches)} candidate matches: {exc}") from exc
     registered_preview = warp_source(src, geometry.matrix, ref.shape)
     registered = warp_source(np.asarray(source.image), geometry.matrix, ref.shape)
-    metrics = registration_metrics(geometry, source_keypoints=source_keypoints,
-                                   reference_keypoints=reference_keypoints,
-                                   candidate_matches=len(matches),
-                                   runtime_seconds=perf_counter() - started)
-    metrics.update(coverage_metrics(matches.reference_points, geometry.inliers, ref.shape))
+    original_residuals = geometry.residuals.copy() if config.subpixel_refinement else None
     if config.spatial_selection:
         selected = select_uniform(matches.reference_points, matches.confidence,
                                   geometry.inliers, ref.shape, rows=config.grid_rows,
@@ -159,6 +155,13 @@ def register(source: LunarImage, reference: LunarImage,
         geometry.residuals[selected] = np.linalg.norm(
             transform_points(matches.source_points[selected], geometry.matrix) - refined,
             axis=1)
+    metrics = registration_metrics(geometry, source_keypoints=source_keypoints,
+                                   reference_keypoints=reference_keypoints,
+                                   candidate_matches=len(matches), runtime_seconds=0.0)
+    metrics.update(coverage_metrics(matches.reference_points, geometry.inliers, ref.shape))
+    if config.subpixel_refinement and len(selected):
+        metrics["pre_refinement_residual_rmse_px"] = float(np.sqrt(np.mean(
+            original_residuals[geometry.inliers] ** 2)))
         metrics["estimated_subpixel_coordinates"] = int(success.sum())
         metrics["refined_selected_residual_rmse_px"] = float(np.sqrt(np.mean(
             geometry.residuals[selected] ** 2)))
@@ -183,5 +186,6 @@ def register(source: LunarImage, reference: LunarImage,
                   else "CVG SuperPoint + LightGlue" if config.matcher == "lightglue" else config.matcher),
         "device": device,
     }
+    metrics["runtime_seconds"] = perf_counter() - started
     return RegistrationResult(src, ref, registered, registered_preview, matches, geometry, metrics,
                               visualization, selected, provenance)

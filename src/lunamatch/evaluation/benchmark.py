@@ -26,8 +26,13 @@ def run_benchmark(config_path: str | Path, output_dir: str | Path) -> list[dict]
     for pair in experiment["pairs"]:
         source_path = (config_path.parent / pair["source"]).resolve()
         reference_path = (config_path.parent / pair["reference"]).resolve()
-        source = load_image(source_path, sensor=pair.get("source_sensor"))
-        reference = load_image(reference_path, sensor=pair.get("reference_sensor"))
+        source = reference = None
+        load_error = None
+        try:
+            source = load_image(source_path, sensor=pair.get("source_sensor"))
+            reference = load_image(reference_path, sensor=pair.get("reference_sensor"))
+        except (RuntimeError, ValueError, MemoryError, OSError) as exc:
+            load_error = exc
         for variant in experiment["variants"]:
             name = str(variant["name"])
             parameters = variant.get("parameters", {})
@@ -42,6 +47,8 @@ def run_benchmark(config_path: str | Path, output_dir: str | Path) -> list[dict]
                    "source": str(source_path), "reference": str(reference_path),
                    "status": "completed", "error": None}
             try:
+                if load_error is not None:
+                    raise ValueError(f"Unable to load pair: {load_error}") from load_error
                 result = register(source, reference, settings)
                 row.update({
                     "matches": result.metrics["candidate_matches"],
@@ -53,7 +60,7 @@ def run_benchmark(config_path: str | Path, output_dir: str | Path) -> list[dict]
                     "runtime_seconds": result.metrics["runtime_seconds"],
                     "device": result.metrics["device"],
                 })
-            except (RuntimeError, ValueError, MemoryError) as exc:
+            except (RuntimeError, ValueError, MemoryError, OSError) as exc:
                 row.update({"status": "failed", "error": str(exc), "matches": None,
                             "inliers": None, "inlier_ratio": None,
                             "registration_residual_rmse_px": None,

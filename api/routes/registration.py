@@ -1,5 +1,6 @@
 """Synchronous registration and durable result retrieval endpoints."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ from uuid import uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from api.schemas import GroundTruthSubmission, RegistrationOptions
 from lunamatch.evaluation.ground_truth import save_evaluation
@@ -18,6 +20,8 @@ from lunamatch.ingestion.validators import ImageLoadError
 from lunamatch.pipeline.registration import register as register_images
 
 router = APIRouter(prefix="/api/v1")
+REGISTRATION_SLOTS = asyncio.Semaphore(max(1, int(os.environ.get(
+    "LUNAMATCH_MAX_CONCURRENT_JOBS", "1"))))
 UPLOAD_SUFFIXES = {".tif", ".tiff", ".png", ".jpg", ".jpeg"}
 ARTIFACTS = {"registered_image.tif", "registered_preview.png", "source_preview.png",
              "reference_preview.png", "overlay.png",
@@ -73,19 +77,23 @@ async def register(source: UploadFile = File(...), reference: UploadFile = File(
     except ValidationError as exc:
         raise HTTPException(422, f"Invalid preprocessing configuration: {exc}") from exc
     try:
-        with tempfile.TemporaryDirectory(prefix="lunamatch-upload-") as temporary:
-            temp = Path(temporary)
-            source_path = await _save_upload(source, temp, "source")
-            reference_path = await _save_upload(reference, temp, "reference")
-            source_image = load_image(source_path, sensor=source_sensor)
-            reference_image = load_image(reference_path, sensor=reference_sensor)
-            result = register_images(source_image, reference_image, options.to_config(matcher))
+        async with REGISTRATION_SLOTS:
+            with tempfile.TemporaryDirectory(prefix="lunamatch-upload-") as temporary:
+                temp = Path(temporary)
+                source_path = await _save_upload(source, temp, "source")
+                reference_path = await _save_upload(reference, temp, "reference")
+                source_image = await run_in_threadpool(load_image, source_path,
+                                                       sensor=source_sensor)
+                reference_image = await run_in_threadpool(load_image, reference_path,
+                                                          sensor=reference_sensor)
+                result = await run_in_threadpool(register_images, source_image, reference_image,
+                                                 options.to_config(matcher))
+            job_id = uuid4().hex
+            await run_in_threadpool(result.save, _results_root() / job_id)
     except (ImageLoadError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from exc
-    job_id = uuid4().hex
-    result.save(_results_root() / job_id)
     return {
         "job_id": job_id,
         "status": "completed",
@@ -150,8 +158,10 @@ async def get_ground_truth(job_id: str) -> dict:
 @router.get("/results/{job_id}/registered-image")
 async def get_registered_image(job_id: str) -> Response:
     """Download the source image warped into reference coordinates."""
-    return Response((_job_dir(job_id) / "registered_image.tif").read_bytes(),
-                    media_type="image/tiff")
+    path = _job_dir(job_id) / "registered_image.tif"
+    if not path.is_file():
+        raise HTTPException(404, "Artifact not found")
+    return Response(await run_in_threadpool(path.read_bytes), media_type="image/tiff")
 
 
 @router.get("/results/{job_id}/artifacts/{name}")
@@ -160,6 +170,8 @@ async def get_artifact(job_id: str, name: str) -> Response:
     if name not in ARTIFACTS:
         raise HTTPException(404, "Artifact not found")
     path = _job_dir(job_id) / name
+    if not path.is_file():
+        raise HTTPException(404, "Artifact not found")
     media_type = "image/png" if name.endswith(".png") else (
         "image/tiff" if name.endswith(".tif") else "application/octet-stream")
-    return Response(path.read_bytes(), media_type=media_type)
+    return Response(await run_in_threadpool(path.read_bytes), media_type=media_type)

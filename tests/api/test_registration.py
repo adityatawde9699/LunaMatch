@@ -41,6 +41,8 @@ def test_upload_register_and_fetch(monkeypatch, tmp_path) -> None:
             assert (await client.get(f"/api/v1/results/{job}/registered-image")).status_code == 200
             assert (await client.get(f"/api/v1/results/{job}/artifacts/overlay.png")).status_code == 200
             assert (await client.get(f"/api/v1/results/{job}/artifacts/nope.py")).status_code == 404
+            assert (await client.get(
+                f"/api/v1/results/{job}/artifacts/ground_truth_points.csv")).status_code == 404
             independent = {"points": [
                 {"id": "manual-1", "source_x": 20, "source_y": 20,
                  "reference_x": 29, "reference_y": 14},

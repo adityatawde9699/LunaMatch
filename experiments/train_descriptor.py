@@ -33,7 +33,7 @@ def main() -> int:
         gray, args.output, epochs=args.epochs, batch_size=args.batch_size,
         samples=args.samples, patch_size=args.patch_size,
         embedding_dim=args.embedding_dim, learning_rate=args.learning_rate,
-        temperature=args.temperature, device=args.device,
+        temperature=args.temperature, device=args.device, input_paths=args.input,
     )
     print(json.dumps(report, indent=2))
     return 0

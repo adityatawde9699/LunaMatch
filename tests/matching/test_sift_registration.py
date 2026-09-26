@@ -45,6 +45,33 @@ def test_sift_end_to_end(tmp_path) -> None:
     assert json.loads((tmp_path / "metrics.json").read_text())["inliers"] > 30
 
 
+def test_refinement_metrics_match_exported_residuals(tmp_path, monkeypatch) -> None:
+    import time
+    from lunamatch.pipeline import registration
+
+    source = synthetic_terrain()
+    reference = cv2.warpAffine(source, np.float32([[1, 0, 9], [0, 1, -6]]),
+                               (480, 360))
+    original_refine = registration.refine_points
+
+    def delayed_refine(*args, **kwargs):
+        time.sleep(0.05)
+        return original_refine(*args, **kwargs)
+
+    monkeypatch.setattr(registration, "refine_points", delayed_refine)
+    result = register(load_image(source), load_image(reference),
+                      RegistrationConfig(geometry_model="affine", subpixel_refinement=True))
+    inlier_errors = result.geometry.residuals[result.geometry.inliers]
+    assert result.metrics["registration_residual_rmse_px"] == pytest.approx(
+        np.sqrt(np.mean(inlier_errors**2)))
+    assert result.metrics["runtime_seconds"] >= 0.05
+    result.save(tmp_path)
+    exported = json.loads((tmp_path / "candidate_matches.json").read_text())
+    exported_errors = [row["error"] for row in exported if row["inlier"]]
+    assert result.metrics["registration_residual_rmse_px"] == pytest.approx(
+        np.sqrt(np.mean(np.square(exported_errors))))
+
+
 def test_featureless_pair_has_useful_error() -> None:
     image = np.full((100, 100), 127, np.uint8)
     with pytest.raises(ValueError, match="intensity variation"):

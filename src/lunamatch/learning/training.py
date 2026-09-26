@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -95,15 +96,19 @@ def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *
                      batch_size: int = 64, learning_rate: float = 1e-3,
                      embedding_dim: int = 128, patch_size: int = 32,
                      samples: int = 2048, temperature: float = 0.1,
-                     seed: int = 26166, device: str = "auto") -> dict[str, Any]:
+                     seed: int = 26166, device: str = "auto",
+                     input_paths: list[str | Path] | None = None) -> dict[str, Any]:
     """Train and save a descriptor checkpoint on declared training pixels.
 
     This is representation pretraining. If the input is synthetic, the
     checkpoint must not be presented as Chandrayaan-2 validation.
     """
     torch, _, data = _imports()
-    if epochs < 1 or batch_size < 2 or learning_rate <= 0 or temperature <= 0:
-        raise ValueError("epochs, batch_size, learning_rate, and temperature are invalid")
+    if epochs < 1 or batch_size < 2 or samples < 2 or learning_rate <= 0 or temperature <= 0:
+        raise ValueError("epochs, batch_size, samples, learning_rate, and temperature are invalid")
+    training_images = image if isinstance(image, list) else [image]
+    if input_paths is not None and len(input_paths) != len(training_images):
+        raise ValueError("input_paths must match the number of training images")
     torch.manual_seed(seed)
     np.random.seed(seed)
     selected = "cuda" if device == "auto" and torch.cuda.is_available() else device
@@ -115,11 +120,14 @@ def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *
         raise ValueError("device must be auto, cpu, or cuda")
     DataLoader, _ = data
     dataset = PatchAugmentationDataset(image, patch_size=patch_size, samples=samples, seed=seed)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    # A short run must still contain a contrastive batch with at least two pairs.
+    effective_batch_size = min(batch_size, samples)
+    loader = DataLoader(dataset, batch_size=effective_batch_size, shuffle=True, drop_last=True)
     model = LunarPatchDescriptor(embedding_dim=embedding_dim).to(selected)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     history: list[dict[str, float]] = []
     model.train()
+    training_steps = 0
     for epoch in range(epochs):
         total = 0.0
         batches = 0
@@ -129,9 +137,12 @@ def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
+            training_steps += 1
             total += float(loss.detach().cpu())
             batches += 1
-        history.append({"epoch": epoch + 1, "loss": total / max(batches, 1)})
+        if batches == 0:
+            raise RuntimeError("No training batches were produced; checkpoint was not saved")
+        history.append({"epoch": epoch + 1, "loss": total / batches, "batches": batches})
     model.eval()
     correct = total_pairs = 0
     with torch.inference_mode():
@@ -140,7 +151,9 @@ def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *
             predictions = (z1 @ z2.T).argmax(dim=1)
             correct += int((predictions == torch.arange(len(predictions), device=predictions.device)).sum())
             total_pairs += len(predictions)
-    alignment_top1 = correct / max(total_pairs, 1)
+    alignment_top1 = correct / total_pairs
+    image_fingerprints = [sha256(np.ascontiguousarray(item).view(np.uint8)).hexdigest()
+                          for item in training_images]
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"model_state": model.state_dict(), "embedding_dim": embedding_dim,
@@ -148,11 +161,18 @@ def train_descriptor(image: np.ndarray | list[np.ndarray], output: str | Path, *
     report = {
         "checkpoint": str(destination), "model": "LunarPatchDescriptor",
         "training_objective": "symmetric in-batch InfoNCE under geometric/photometric lunar-view augmentation",
-        "epochs": epochs, "batch_size": batch_size, "samples": samples,
+        "epochs": epochs, "batch_size": batch_size,
+        "effective_batch_size": effective_batch_size, "training_steps": training_steps,
+        "samples": samples,
         "training_images": len(image) if isinstance(image, list) else 1,
+        "training_input_paths": [str(Path(path).resolve()) for path in input_paths]
+        if input_paths is not None else None,
+        "training_image_sha256": image_fingerprints,
+        "training_image_shapes": [list(item.shape) for item in training_images],
         "embedding_dim": embedding_dim, "patch_size": patch_size,
         "device": selected, "seed": seed, "history": history,
         "alignment_top1": alignment_top1,
+        "evaluation_split": "training samples only; no held-out scenes",
         "validation": "augmentation-pair retrieval only; registration accuracy not evaluated",
     }
     destination.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n")
