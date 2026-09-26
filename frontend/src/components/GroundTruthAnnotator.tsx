@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { MouseEvent } from 'react'
 import { evaluateGroundTruth } from '../services/api'
+import { apiUrl } from '../services/urls'
 import type { GroundTruthEvaluation, GroundTruthPoint } from '../types'
 
 type PixelPoint = { x: number, y: number }
@@ -96,8 +97,8 @@ export default function GroundTruthAnnotator({ jobId, sourceUrl, referenceUrl }:
       <span>Median {report.ground_truth_median_px.toFixed(2)} px</span>
       <span>95th percentile {report.ground_truth_p95_px.toFixed(2)} px</span>
       <span>{report.point_count} point(s) · user supplied, independently verified status unknown</span>
-      <a href={`/api/v1/results/${jobId}/artifacts/ground_truth_evaluation.json`} download>Download evaluation JSON</a>
-      <a href={`/api/v1/results/${jobId}/artifacts/ground_truth_points.csv`} download>Download evaluated points CSV</a>
+      <a href={apiUrl(`/api/v1/results/${jobId}/artifacts/ground_truth_evaluation.json`)} download>Download evaluation JSON</a>
+      <a href={apiUrl(`/api/v1/results/${jobId}/artifacts/ground_truth_points.csv`)} download>Download evaluated points CSV</a>
     </div>}
   </section>
 }

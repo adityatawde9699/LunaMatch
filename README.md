@@ -296,6 +296,18 @@ docker compose up --build
 
 Compose exposes the API on port 8000 and dashboard on port 5173. Both images built, and a local smoke test returned API health plus the dashboard HTML. Real OHRC/TMC-2/IIRS pairs must be prepared and independently evaluated before any scientific performance claim.
 
+## Deploy on Render and Vercel
+
+Deploy the Python API as a **Render Docker web service** and the React/Vite dashboard as a **Vercel static site**. The production frontend calls Render directly through `VITE_API_BASE_URL`; local Vite and Docker Compose continue to proxy `/api` when that variable is unset.
+
+1. Push the code to GitHub. Downloaded `data/`, generated `results/`, and descriptor checkpoints are excluded from Git and will not appear in either deployment.
+2. In Render, create a **Web Service** from this repository. Choose **Docker**, use the repository root and root `Dockerfile`, and set the health check path to `/health`. The Docker command now binds to Render's `PORT` automatically. After deployment, confirm `https://<your-render-service>.onrender.com/health` returns `{"status":"ok"}`.
+3. In Vercel, import the same repository. Set **Root Directory** to `frontend`, **Framework Preset** to Vite, **Build Command** to `npm run build`, and **Output Directory** to `dist`. Set the production environment variable `VITE_API_BASE_URL` to the Render URL, such as `https://<your-render-service>.onrender.com`, with no `/api` suffix. Deploy and copy the Vercel site URL.
+4. Back in Render, set `LUNAMATCH_CORS_ORIGINS` to that exact Vercel origin, such as `https://<your-project>.vercel.app`, and redeploy or restart the API. For more than one trusted frontend, separate origins with commas. Do not include a trailing slash.
+5. Open the Vercel site and register a small PNG/JPEG/TIFF pair with SIFT. Browser uploads are limited to 100 MB per file by default. PDS4 labels with external binaries use the local CLI.
+
+Render's default filesystem is temporary. Job artifacts disappear on restart or redeploy unless you attach a paid persistent disk and set `LUNAMATCH_RESULTS_DIR` to a directory under its mount path. The free Render service has 512 MB RAM and can sleep after inactivity; it is suitable only for small baseline tests. PyTorch matchers and large lunar rasters need more memory and can require a larger instance. The local trained descriptor checkpoint is not deployed with the code: provide it separately on a persistent volume and set `LUNAMATCH_DESCRIPTOR_CHECKPOINT` to its path before selecting **LunaPatchDescriptor (trained)**. LoFTR and LightGlue download their pretrained weights on first use, so set `LUNAMATCH_MODEL_CACHE` to persistent storage if repeated downloads are undesirable. These deployment notes do not imply that a public instance has been deployed or that real-data accuracy is validated.
+
 ## Troubleshooting
 
 - **`No pyramid-level pair produced a valid transformation`**: try SIFT first, enable `--clahe`, use `--geometry affine`, or provide a smaller overlapping window.

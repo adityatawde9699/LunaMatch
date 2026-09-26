@@ -15,4 +15,4 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
     pip install --no-cache-dir --no-deps 'git+https://github.com/cvg/LightGlue.git@eb42fee2d71449efb0aa5c10549752b5d75384d8'
 RUN mkdir -p /app/results/jobs /app/model-cache
 EXPOSE 8000
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
