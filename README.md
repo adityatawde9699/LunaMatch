@@ -298,6 +298,8 @@ Compose exposes the API on port 8000 and dashboard on port 5173. Both images bui
 
 ## Deploy on Render and Vercel
 
+See [deployment.md](deployment.md) for the complete deployment checklist, storage setup, and smoke test. Configuration templates are [`.env.example`](.env.example) for the API and [`frontend/.env.example`](frontend/.env.example) for Vite.
+
 Deploy the Python API as a **Render Docker web service** and the React/Vite dashboard as a **Vercel static site**. The production frontend calls Render directly through `VITE_API_BASE_URL`; local Vite and Docker Compose continue to proxy `/api` when that variable is unset.
 
 1. Push the code to GitHub. Downloaded `data/`, generated `results/`, and descriptor checkpoints are excluded from Git and will not appear in either deployment.
