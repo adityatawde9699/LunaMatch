@@ -15,6 +15,18 @@ SCIENCE_SUFFIXES = {".img", ".qub", ".jp2", ".tif", ".tiff"}
 QUICKLOOK_SUFFIXES = {".png", ".jpg", ".jpeg"}
 
 
+def _sensor_for_path(path: Path) -> str | None:
+    """Infer the sensor from the explicit raw2 directory or product name."""
+    name = path.as_posix().lower()
+    if "/tmc-2/" in name or "tmc_" in name:
+        return "TMC-2"
+    if "/ohrc/" in name or "ch2_ohr_" in name or "ohrc" in name:
+        return "OHRC"
+    if "/iirs/" in name or "ch2_iir_" in name or "iirs" in name:
+        return "IIRS"
+    return None
+
+
 def inventory_sensor_data(raw_root: Path, data_root: Path) -> dict[str, Any]:
     """Inventory valid product archives, raster members, partials, and staged products."""
     output: dict[str, Any] = {"sensors": {}, "scope_note": (
@@ -23,7 +35,8 @@ def inventory_sensor_data(raw_root: Path, data_root: Path) -> dict[str, Any]:
     )}
     for sensor in SENSORS:
         sensor_dir = raw_root / sensor
-        archives = sorted(sensor_dir.rglob("*.zip")) if sensor_dir.exists() else []
+        archives = sorted(path for path in raw_root.rglob("*.zip")
+                          if _sensor_for_path(path) == sensor)
         complete: list[dict[str, Any]] = []
         invalid: list[str] = []
         for archive_path in archives:
@@ -41,9 +54,17 @@ def inventory_sensor_data(raw_root: Path, data_root: Path) -> dict[str, Any]:
                 })
             except (BadZipFile, OSError):
                 invalid.append(str(archive_path.relative_to(raw_root)))
-        partials = sorted(sensor_dir.rglob("*.part")) if sensor_dir.exists() else []
+        partials = sorted(path for path in raw_root.rglob("*.part")
+                          if _sensor_for_path(path) == sensor)
         staged_root = data_root.rglob("lunamatch_product_manifest.json")
         manifests = [path for path in staged_root if f"/{sensor}/" in path.as_posix()]
+        extracted_products = []
+        if sensor == "IIRS":
+            extracted_products = sorted({
+                path.parents[2]
+                for path in (raw_root / sensor).rglob("*.qub")
+                if path.is_file()
+            }) if (raw_root / sensor).exists() else []
         output["sensors"][sensor] = {
             "downloaded_product_archives": len(complete),
             "archives_containing_science_rasters": sum(
@@ -56,6 +77,7 @@ def inventory_sensor_data(raw_root: Path, data_root: Path) -> dict[str, Any]:
                 record["browse_image_members"] for record in complete
             ),
             "staged_products": len(manifests),
+            "extracted_products": len(extracted_products),
             "incomplete_downloads": len(partials),
             "invalid_archives": invalid,
             "products": complete,

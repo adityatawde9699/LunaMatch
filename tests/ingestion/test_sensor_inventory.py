@@ -27,3 +27,20 @@ def test_inventory_separates_product_rasters_quicklooks_and_staging(tmp_path) ->
     assert result["sensors"]["TMC-2"]["staged_products"] == 1
     assert result["sensors"]["TMC-2"]["incomplete_downloads"] == 1
     assert result["sensors"]["IIRS"]["downloaded_product_archives"] == 0
+
+
+def test_inventory_finds_flat_sensor_product_archives(tmp_path) -> None:
+    raw_root = tmp_path / "raw2"
+    data_root = tmp_path / "data"
+    raw_root.mkdir(parents=True)
+    with ZipFile(raw_root / "ch2_ohr_ncp_test.zip", "w") as archive:
+        archive.writestr("data/calibrated/test.img", b"science")
+        archive.writestr("browse/calibrated/test.png", b"quicklook")
+    with ZipFile(raw_root / "ch2_iir_ndi_test.zip", "w") as archive:
+        archive.writestr("data/derived/test.qub", b"science")
+
+    result = inventory_sensor_data(raw_root, data_root)
+
+    assert result["sensors"]["OHRC"]["downloaded_product_archives"] == 1
+    assert result["sensors"]["IIRS"]["downloaded_product_archives"] == 1
+    assert result["sensors"]["IIRS"]["science_raster_members"] == 1

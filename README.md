@@ -116,7 +116,7 @@ Official Chandrayaan-2 imaging products are listed in the [ISRO/ISSDC PRADAN Cha
 
 `data/raw2` has a separate [initial inventory](data/processed/raw2_inventory.csv) and a live [sensor product inventory](data/processed/sensor_product_inventory.json). The initial inventory describes the instrument bundles and footprint shapefiles; it predates the TMC-2 product downloads. The LTA assembly note says observation product ZIPs must be downloaded separately. Generate a fresh count with `python experiments/inventory_sensor_data.py`.
 
-Current workspace inventory: TMC-2 has 15 complete product ZIPs downloaded, of which five selected same-pass products are staged; one additional download is incomplete. OHRC and IIRS currently have no observation product ZIPs staged. The existing `ohr.zip`, `iir.zip`, and shapefile ZIPs are ancillary instrument metadata/footprints, not observation images. Counts are recalculated by the inventory script and do not count those ancillary archives as products.
+Current workspace inventory: TMC-2 has 15 complete product ZIPs downloaded, of which five selected same-pass products are staged; one additional download is incomplete. OHRC has five complete calibrated product ZIPs and all five are staged. IIRS has four complete derived product ZIPs and all four are staged; its fifth transfer is incomplete. The existing `ohr.zip`, `iir.zip`, and shapefile ZIPs are ancillary instrument metadata/footprints, not observation products. Counts are recalculated by the inventory script and include flat product archives under `data/raw2/`.
 
 The local inventory contains calibrated TMC-2 browse products, raw TMC-2 browse products, sensor footprint shapefiles, TMC geolocation grids, and instrument documentation. It also contains ancillary CHACE-2, CLASS, DFSAR/SAR, and XSM material outside the optical matcher scope. Several year archives are incomplete `.part` files or zero-byte placeholders and were left untouched. The available browse-image archive includes 330 calibrated TMC-2 PNGs for 2019, plus raw browse PNG archives for 2019–2021; these are quicklook images rather than full-resolution science products. A calibrated fore/nadir/aft triplet with its XML labels was extracted to `data/calibrated/TMC-2/browse_2019_10_15/`.
 
@@ -152,6 +152,10 @@ It registers calibrated nadir-to-aft, calibrated nadir-to-fore, raw nadir-to-for
 
 When a PNG/JPEG has a same-stem PDS4 XML sidecar, the loader retains available acquisition and instrument fields; missing fields remain `null`. Independent ground truth is unavailable for the current pairs.
 
+The staged OHRC and IIRS products can be checked with the same CLI baseline. Example browse runs are recorded in `results/ohrc_browse_20260103_1203_to_1005/` and `results/iirs_browse_20240518_1906_to_1709/`; they use official browse PNGs and PDS4 sidecar labels. The OHRC check produced 697 inliers from 2,431 matches with 54.7% selected coverage. The IIRS check produced 757 inliers from 1,526 matches with 37.5% selected coverage. These are quicklook registration measurements, not ground-truth accuracy.
+
+The IIRS science cubes contain 256 bands and are several gigabytes each. The current PDS4 loader deliberately refuses a full cube above its memory limit; bounded band/window loading is the next IIRS implementation step.
+
 To register native-resolution TMC-2 windows from the same five products, first run the browse experiment above, then:
 
 ```bash
@@ -161,7 +165,7 @@ To register native-resolution TMC-2 windows from the same five products, first r
 
 This run selects overlapping stereo source windows using the measured browse transformations and the actual browse/science dimensions. SIFT and RANSAC then operate on native IMG pixels. It writes full-image pixel tie points and transforms beside each crop result under `results/tmc2_science_prototype/`, with a summary in `data/processed/tmc2_science_window_report.json`. The browse transform locates the crops; it is not passed to native-resolution RANSAC. The default window registered calibrated fore/nadir and aft/nadir with 2,739 and 2,742 inliers, and a raw/calibrated nadir pair with 5,287 inliers. Their fitted reprojection residual RMSEs were 1.44, 1.49, and 0.10 pixels respectively. These are three crop-pair pipeline measurements on official imagery, without independent truth data.
 
-Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Full-strip TMC-2 processing, real OHRC/IIRS registration, cross-modal matching, and lunar-reference registration remain **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open.
+Sensor labels supplied with `--sensor` are user declarations; a PNG test image labeled OHRC does not become an OHRC observation. Full-strip TMC-2/OHRC processing, IIRS cube registration, cross-modal matching, and lunar-reference registration remain **not evaluated yet**. A homography is a local image warp and may be physically insufficient for terrain relief and differing views. Calibrated lunar reference geodesy, a GPU inference test, and a rigorous ground-truth sub-pixel study remain open.
 
 ## API and dashboard
 
